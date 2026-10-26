@@ -1,0 +1,40 @@
+{
+  "name": "not-google-photos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.4",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @ngp/server --filter @ngp/web --parallel run dev",
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "db:up": "infra/compose.sh up -d db",
+    "db:generate": "pnpm --filter @ngp/server run db:generate",
+    "db:migrate": "pnpm --filter @ngp/server run db:migrate",
+    "seed": "pnpm --filter @ngp/server run seed",
+    "openapi": "pnpm --filter @ngp/server run openapi",
+    "stack:up": "infra/compose.sh up -d --build",
+    "stack:down": "infra/compose.sh down",
+    "stack:logs": "infra/compose.sh logs -f --tail=100"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.4.0",
+    "prettier": "^3.9.10",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.0"
+  }
+}

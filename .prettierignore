@@ -1,0 +1,10 @@
+pnpm-lock.yaml
+**/dist/
+**/coverage/
+data/
+apps/server/drizzle/
+apps/ml/
+apps/mobile/android/
+apps/mobile/ios/
+packages/photo-sync/android/
+packages/photo-sync/ios/
