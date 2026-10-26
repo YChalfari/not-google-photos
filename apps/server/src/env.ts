@@ -35,6 +35,21 @@ const EnvSchema = z.object({
   JOBS_ENABLED: withDefault(z.stringbool(), true),
   /** Trust `X-Forwarded-*` headers (behind Cloudflare Tunnel, Tailscale Serve, or Caddy). */
   TRUST_PROXY: withDefault(z.stringbool(), false),
+  /**
+   * Extra browser origins allowed to call the API with a device token, comma-separated. The phone
+   * app's origins are always allowed; cookies never work cross-origin.
+   */
+  CORS_ORIGINS: withDefault(
+    z
+      .string()
+      .transform((value) =>
+        value
+          .split(',')
+          .map((origin) => origin.trim().replace(/\/+$/, ''))
+          .filter(Boolean),
+      ),
+    [],
+  ),
   COOKIE_SECURE: withDefault(z.enum(['auto', 'always', 'never']), 'auto'),
   SESSION_TTL_DAYS: withDefault(z.coerce.number().int().min(1).max(365), 30),
   MEDIA_URL_TTL_SECONDS: withDefault(

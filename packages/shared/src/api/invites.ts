@@ -98,6 +98,7 @@ export const inviteEndpoints = defineEndpoints({
     body: CreateInviteRequest,
     response: CreateInviteResponse,
     successStatus: 201,
+    errors: ['conflict'],
     stability: 'stable',
   },
   'invites.revoke': {

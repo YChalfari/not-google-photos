@@ -1,4 +1,4 @@
-import { eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type pg from 'pg';
 import { createDatabase, type Db } from './db/client';
 import { serverConfig } from './db/schema';
@@ -34,7 +34,11 @@ export interface AppContext {
   jobs: Jobs | null;
 }
 
-export async function createContext(env: Env, log: Logger): Promise<AppContext> {
+export async function createContext(
+  env: Env,
+  log: Logger,
+  options: { limits?: RateLimits } = {},
+): Promise<AppContext> {
   const { db, pool } = createDatabase(env.DATABASE_URL);
   const config = await ensureServerConfig(db, env);
 
@@ -47,8 +51,7 @@ export async function createContext(env: Env, log: Logger): Promise<AppContext> 
       await db
         .update(serverConfig)
         .set({ libraryInitializedAt: new Date() })
-        .where(eq(serverConfig.id, 1))
-        .where(isNull(serverConfig.libraryInitializedAt));
+        .where(and(eq(serverConfig.id, 1), isNull(serverConfig.libraryInitializedAt)));
     },
   });
   const storage = new LocalStorageProvider(env.LIBRARY_DIR, library);
@@ -66,7 +69,7 @@ export async function createContext(env: Env, log: Logger): Promise<AppContext> 
     files: new FileStore(db, storage),
     media: new MediaSigner(env.SECRET_KEY ?? config.signingSecret, env.MEDIA_URL_TTL_SECONDS),
     ml: new MlClient(env.ML_URL),
-    limits: createRateLimits(),
+    limits: options.limits ?? createRateLimits(),
     jobs: null,
   };
 }

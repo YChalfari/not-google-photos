@@ -37,9 +37,13 @@ export const BaseUrl = z
   .transform((value) => value.replace(/\/+$/, ''));
 
 export const UserRole = z.enum(USER_ROLES);
+export type UserRole = z.infer<typeof UserRole>;
 export const DevicePlatform = z.enum(DEVICE_PLATFORMS);
+export type DevicePlatform = z.infer<typeof DevicePlatform>;
 export const AssetType = z.enum(ASSET_TYPES);
+export type AssetType = z.infer<typeof AssetType>;
 export const MediaVariant = z.enum(MEDIA_VARIANTS);
+export type MediaVariant = z.infer<typeof MediaVariant>;
 
 export const Bytes = z.number().int().nonnegative();
 
