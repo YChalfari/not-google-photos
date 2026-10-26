@@ -1,0 +1,507 @@
+{
+  "model": "ViT-B-16-SigLIP2__webli",
+  "providers": [
+    "CPUExecutionProvider"
+  ],
+  "images": 1000,
+  "ms_per_image": 64.2,
+  "retrieval": {
+    "en": {
+      "captions": 2000,
+      "R@1": 72.5,
+      "R@5": 91.8,
+      "R@10": 95.9,
+      "ms_per_text": 24.6
+    },
+    "he": {
+      "captions": 2000,
+      "R@1": 53.9,
+      "R@5": 76.6,
+      "R@10": 82.8,
+      "ms_per_text": 38.0
+    }
+  },
+  "keywords": {
+    "count": 27,
+    "relevant_images": {
+      "dog": 8,
+      "beach": 17,
+      "snow": 21,
+      "car": 68,
+      "food": 41,
+      "flowers": 32,
+      "mountains": 89,
+      "sunset": 7,
+      "boat": 20,
+      "bicycle": 8,
+      "horse": 3,
+      "bird": 9,
+      "trees": 211,
+      "church": 14,
+      "children": 17,
+      "baby": 3,
+      "cake": 3,
+      "night": 29,
+      "river": 38,
+      "street": 53,
+      "train": 7,
+      "airplane": 12,
+      "bridge": 9,
+      "statue": 17,
+      "bus": 6,
+      "fruit": 9,
+      "guitar": 3
+    },
+    "search": {
+      "en": {
+        "mAP": 68.0,
+        "P@10": 63.0,
+        "AP": {
+          "dog": 81.5,
+          "beach": 61.0,
+          "snow": 75.4,
+          "car": 86.6,
+          "food": 54.1,
+          "flowers": 90.5,
+          "mountains": 81.2,
+          "sunset": 94.0,
+          "boat": 77.5,
+          "bicycle": 89.6,
+          "horse": 60.0,
+          "bird": 45.0,
+          "trees": 62.7,
+          "church": 71.6,
+          "children": 44.3,
+          "baby": 67.4,
+          "cake": 75.6,
+          "night": 67.4,
+          "river": 49.6,
+          "street": 44.9,
+          "train": 76.1,
+          "airplane": 69.9,
+          "bridge": 54.3,
+          "statue": 54.9,
+          "bus": 64.4,
+          "fruit": 70.7,
+          "guitar": 66.9
+        }
+      },
+      "he": {
+        "mAP": 54.0,
+        "P@10": 54.4,
+        "AP": {
+          "כלב": 73.3,
+          "חוף ים": 43.8,
+          "שלג": 58.5,
+          "מכונית": 77.6,
+          "אוכל": 44.6,
+          "פרחים": 83.4,
+          "הרים": 79.0,
+          "שקיעה": 84.1,
+          "סירה": 56.4,
+          "אופניים": 84.2,
+          "סוס": 31.6,
+          "ציפור": 35.5,
+          "עצים": 52.1,
+          "כנסייה": 46.1,
+          "ילדים": 46.9,
+          "תינוק": 27.2,
+          "עוגה": 34.2,
+          "לילה": 3.2,
+          "נהר": 44.2,
+          "רחוב": 33.1,
+          "רכבת": 68.7,
+          "מטוס": 65.2,
+          "גשר": 47.4,
+          "פסל": 46.9,
+          "אוטובוס": 58.9,
+          "פירות": 75.0,
+          "גיטרה": 55.7
+        }
+      },
+      "en, 'a photo of'": {
+        "mAP": 62.3,
+        "P@10": 59.3,
+        "AP": {
+          "a photo of dog": 68.5,
+          "a photo of beach": 55.1,
+          "a photo of snow": 62.2,
+          "a photo of car": 89.2,
+          "a photo of food": 53.4,
+          "a photo of flowers": 87.6,
+          "a photo of mountains": 79.6,
+          "a photo of sunset": 89.9,
+          "a photo of boat": 55.0,
+          "a photo of bicycle": 87.9,
+          "a photo of horse": 44.3,
+          "a photo of bird": 31.2,
+          "a photo of trees": 62.8,
+          "a photo of church": 64.9,
+          "a photo of children": 40.7,
+          "a photo of baby": 52.3,
+          "a photo of cake": 63.9,
+          "a photo of night": 63.0,
+          "a photo of river": 44.2,
+          "a photo of street": 35.1,
+          "a photo of train": 70.6,
+          "a photo of airplane": 82.6,
+          "a photo of bridge": 48.5,
+          "a photo of statue": 57.3,
+          "a photo of bus": 66.8,
+          "a photo of fruit": 59.7,
+          "a photo of guitar": 66.8
+        }
+      },
+      "he, 'תמונה של'": {
+        "mAP": 49.2,
+        "P@10": 49.6,
+        "AP": {
+          "תמונה של כלב": 65.4,
+          "תמונה של חוף ים": 39.0,
+          "תמונה של שלג": 33.6,
+          "תמונה של מכונית": 75.5,
+          "תמונה של אוכל": 43.3,
+          "תמונה של פרחים": 79.9,
+          "תמונה של הרים": 72.2,
+          "תמונה של שקיעה": 77.6,
+          "תמונה של סירה": 43.1,
+          "תמונה של אופניים": 79.8,
+          "תמונה של סוס": 20.2,
+          "תמונה של ציפור": 31.9,
+          "תמונה של עצים": 50.1,
+          "תמונה של כנסייה": 40.4,
+          "תמונה של ילדים": 46.6,
+          "תמונה של תינוק": 21.8,
+          "תמונה של עוגה": 31.3,
+          "תמונה של לילה": 41.0,
+          "תמונה של נהר": 32.5,
+          "תמונה של רחוב": 29.0,
+          "תמונה של רכבת": 52.0,
+          "תמונה של מטוס": 62.9,
+          "תמונה של גשר": 32.7,
+          "תמונה של פסל": 48.0,
+          "תמונה של אוטובוס": 56.2,
+          "תמונה של פירות": 66.0,
+          "תמונה של גיטרה": 55.7
+        }
+      }
+    }
+  },
+  "tagging": {
+    "logit_scale": 112.66890226978423,
+    "logit_bias": -16.771724700927734,
+    "service_templates": [
+      "{}"
+    ],
+    "prompts": {
+      "label only": {
+        "templates": [
+          "{}"
+        ],
+        "label_mAP": 68.0,
+        "pooled_AP": 50.8,
+        "median_prob_relevant": 0.00032730697421357036,
+        "p99_prob_irrelevant": 0.00036669548717327416,
+        "best_f1": {
+          "threshold": 0.0002,
+          "precision": 51.5,
+          "recall": 56.0,
+          "f1": 53.7,
+          "tags_per_image": 0.82
+        },
+        "thresholds": [
+          {
+            "threshold": 0.0001,
+            "precision": 43.2,
+            "recall": 61.8,
+            "f1": 50.9,
+            "tags_per_image": 1.08
+          },
+          {
+            "threshold": 0.0002,
+            "precision": 51.5,
+            "recall": 56.0,
+            "f1": 53.7,
+            "tags_per_image": 0.82
+          },
+          {
+            "threshold": 0.0005,
+            "precision": 60.5,
+            "recall": 44.6,
+            "f1": 51.3,
+            "tags_per_image": 0.56
+          },
+          {
+            "threshold": 0.001,
+            "precision": 67.5,
+            "recall": 36.3,
+            "f1": 47.2,
+            "tags_per_image": 0.41
+          },
+          {
+            "threshold": 0.002,
+            "precision": 73.6,
+            "recall": 26.3,
+            "f1": 38.7,
+            "tags_per_image": 0.27
+          },
+          {
+            "threshold": 0.005,
+            "precision": 79.1,
+            "recall": 13.5,
+            "f1": 23.1,
+            "tags_per_image": 0.13
+          },
+          {
+            "threshold": 0.01,
+            "precision": 83.8,
+            "recall": 8.9,
+            "f1": 16.1,
+            "tags_per_image": 0.08
+          },
+          {
+            "threshold": 0.02,
+            "precision": 91.4,
+            "recall": 4.2,
+            "f1": 8.1,
+            "tags_per_image": 0.04
+          },
+          {
+            "threshold": 0.05,
+            "precision": 100.0,
+            "recall": 1.1,
+            "f1": 2.1,
+            "tags_per_image": 0.01
+          },
+          {
+            "threshold": 0.1,
+            "precision": 100.0,
+            "recall": 0.1,
+            "f1": 0.3,
+            "tags_per_image": 0.0
+          },
+          {
+            "threshold": 0.2,
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "tags_per_image": 0.0
+          },
+          {
+            "threshold": 0.5,
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "tags_per_image": 0.0
+          }
+        ]
+      },
+      "a photo of": {
+        "templates": [
+          "a photo of {}."
+        ],
+        "label_mAP": 62.3,
+        "pooled_AP": 46.4,
+        "median_prob_relevant": 0.00041714945109561086,
+        "p99_prob_irrelevant": 0.0006469361251220107,
+        "best_f1": {
+          "threshold": 0.0005,
+          "precision": 53.8,
+          "recall": 47.9,
+          "f1": 50.7,
+          "tags_per_image": 0.67
+        },
+        "thresholds": [
+          {
+            "threshold": 0.0001,
+            "precision": 33.8,
+            "recall": 63.4,
+            "f1": 44.1,
+            "tags_per_image": 1.42
+          },
+          {
+            "threshold": 0.0002,
+            "precision": 42.3,
+            "recall": 57.7,
+            "f1": 48.8,
+            "tags_per_image": 1.03
+          },
+          {
+            "threshold": 0.0005,
+            "precision": 53.8,
+            "recall": 47.9,
+            "f1": 50.7,
+            "tags_per_image": 0.67
+          },
+          {
+            "threshold": 0.001,
+            "precision": 61.8,
+            "recall": 40.8,
+            "f1": 49.2,
+            "tags_per_image": 0.5
+          },
+          {
+            "threshold": 0.002,
+            "precision": 67.2,
+            "recall": 30.6,
+            "f1": 42.1,
+            "tags_per_image": 0.34
+          },
+          {
+            "threshold": 0.005,
+            "precision": 73.3,
+            "recall": 19.0,
+            "f1": 30.1,
+            "tags_per_image": 0.2
+          },
+          {
+            "threshold": 0.01,
+            "precision": 76.9,
+            "recall": 13.7,
+            "f1": 23.2,
+            "tags_per_image": 0.13
+          },
+          {
+            "threshold": 0.02,
+            "precision": 81.9,
+            "recall": 7.8,
+            "f1": 14.3,
+            "tags_per_image": 0.07
+          },
+          {
+            "threshold": 0.05,
+            "precision": 91.3,
+            "recall": 2.8,
+            "f1": 5.4,
+            "tags_per_image": 0.02
+          },
+          {
+            "threshold": 0.1,
+            "precision": 88.9,
+            "recall": 1.1,
+            "f1": 2.1,
+            "tags_per_image": 0.01
+          },
+          {
+            "threshold": 0.2,
+            "precision": 100.0,
+            "recall": 0.4,
+            "f1": 0.8,
+            "tags_per_image": 0.0
+          },
+          {
+            "threshold": 0.5,
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "tags_per_image": 0.0
+          }
+        ]
+      },
+      "3 templates": {
+        "templates": [
+          "a photo of {}.",
+          "a photo of a {}.",
+          "this is a photo of {}."
+        ],
+        "label_mAP": 64.0,
+        "pooled_AP": 49.1,
+        "median_prob_relevant": 0.0004124929546378553,
+        "p99_prob_irrelevant": 0.0005133847589604557,
+        "best_f1": {
+          "threshold": 0.0005,
+          "precision": 57.6,
+          "recall": 48.3,
+          "f1": 52.5,
+          "tags_per_image": 0.63
+        },
+        "thresholds": [
+          {
+            "threshold": 0.0001,
+            "precision": 38.3,
+            "recall": 63.7,
+            "f1": 47.8,
+            "tags_per_image": 1.25
+          },
+          {
+            "threshold": 0.0002,
+            "precision": 46.5,
+            "recall": 57.4,
+            "f1": 51.4,
+            "tags_per_image": 0.93
+          },
+          {
+            "threshold": 0.0005,
+            "precision": 57.6,
+            "recall": 48.3,
+            "f1": 52.5,
+            "tags_per_image": 0.63
+          },
+          {
+            "threshold": 0.001,
+            "precision": 65.0,
+            "recall": 39.4,
+            "f1": 49.1,
+            "tags_per_image": 0.46
+          },
+          {
+            "threshold": 0.002,
+            "precision": 68.7,
+            "recall": 30.2,
+            "f1": 42.0,
+            "tags_per_image": 0.33
+          },
+          {
+            "threshold": 0.005,
+            "precision": 76.4,
+            "recall": 18.4,
+            "f1": 29.7,
+            "tags_per_image": 0.18
+          },
+          {
+            "threshold": 0.01,
+            "precision": 79.7,
+            "recall": 12.5,
+            "f1": 21.6,
+            "tags_per_image": 0.12
+          },
+          {
+            "threshold": 0.02,
+            "precision": 83.3,
+            "recall": 7.3,
+            "f1": 13.4,
+            "tags_per_image": 0.07
+          },
+          {
+            "threshold": 0.05,
+            "precision": 95.2,
+            "recall": 2.7,
+            "f1": 5.2,
+            "tags_per_image": 0.02
+          },
+          {
+            "threshold": 0.1,
+            "precision": 100.0,
+            "recall": 1.1,
+            "f1": 2.1,
+            "tags_per_image": 0.01
+          },
+          {
+            "threshold": 0.2,
+            "precision": 100.0,
+            "recall": 0.3,
+            "f1": 0.5,
+            "tags_per_image": 0.0
+          },
+          {
+            "threshold": 0.5,
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "tags_per_image": 0.0
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "_comment": "Identities of the faces in each photo, ordered left to right by box x1.",
+  "biden_1987.jpg": [
+    "joe_biden"
+  ],
+  "biden_2013.jpg": [
+    "joe_biden"
+  ],
+  "biden_2021.jpg": [
+    "joe_biden"
+  ],
+  "obama_2012.jpg": [
+    "barack_obama"
+  ],
+  "obama_family_2011.jpg": [
+    "michelle_obama",
+    "malia_obama",
+    "barack_obama",
+    "sasha_obama"
+  ],
+  "michelle_obama_2009.jpg": [
+    "michelle_obama"
+  ],
+  "michelle_obama_2013.jpg": [
+    "michelle_obama"
+  ],
+  "harris_2010.jpg": [
+    "kamala_harris"
+  ],
+  "harris_2017.jpg": [
+    "kamala_harris"
+  ],
+  "harris_2021.jpg": [
+    "kamala_harris"
+  ],
+  "whitson_2001.jpg": [
+    "peggy_whitson"
+  ],
+  "whitson_2016_iss.jpg": [
+    "peggy_whitson"
+  ],
+  "williams_2018.jpg": [
+    "sunita_williams"
+  ],
+  "williams_wilmore_2024.jpg": [
+    "sunita_williams",
+    "barry_wilmore"
+  ]
+}
