@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ngp_channel_progress">Backup progress</string>
+    <string name="ngp_channel_progress_description">Shows while the first full backup of your camera roll is running.</string>
+    <string name="ngp_channel_reminders">Backup reminders</string>
+    <string name="ngp_channel_reminders_description">One evening reminder when today\'s photos haven\'t backed up.</string>
+    <string name="ngp_channel_memories">Memories</string>
+    <string name="ngp_channel_memories_description">Photos from this day in past years.</string>
+
+    <string name="ngp_progress_title">Backing up your photos</string>
+    <string name="ngp_progress_checking">Checking the server…</string>
+    <string name="ngp_progress_scanning">Looking for new photos…</string>
+    <string name="ngp_progress_preparing">Preparing photos…</string>
+    <string name="ngp_progress_file">%1$d of %2$d · %3$s</string>
+
+    <plurals name="ngp_photos">
+        <item quantity="one">%d photo</item>
+        <item quantity="other">%d photos</item>
+    </plurals>
+    <plurals name="ngp_videos">
+        <item quantity="one">%d video</item>
+        <item quantity="other">%d videos</item>
+    </plurals>
+    <string name="ngp_and">%1$s and %2$s</string>
+
+    <string name="ngp_reminder_title">Not backed up yet</string>
+    <plurals name="ngp_reminder_today">
+        <item quantity="one">%1$s from today isn\'t backed up.</item>
+        <item quantity="other">%1$s from today aren\'t backed up.</item>
+    </plurals>
+    <string name="ngp_cause_server">Is the server on?</string>
+    <plurals name="ngp_cause_server_days">
+        <item quantity="one">The server hasn\'t answered for %d day. Is it on?</item>
+        <item quantity="other">The server hasn\'t answered for %d days. Is it on?</item>
+    </plurals>
+    <string name="ngp_cause_wifi">Backup continues on Wi-Fi.</string>
+    <string name="ngp_cause_offline">Backup continues when the phone is online.</string>
+    <string name="ngp_cause_charging">Videos back up while the phone charges.</string>
+    <string name="ngp_cause_first_backup">The first full backup runs on Wi-Fi while the phone charges.</string>
+    <string name="ngp_cause_pairing">Connect this phone to your server again.</string>
+    <string name="ngp_cause_permission">Allow access to photos and videos so backup can see them.</string>
+    <string name="ngp_cause_other">Tap to see what\'s waiting.</string>
+    <string name="ngp_action_try_now">Try now</string>
+
+    <plurals name="ngp_nudge_title">
+        <item quantity="one">Your server hasn\'t answered for %d day</item>
+        <item quantity="other">Your server hasn\'t answered for %d days</item>
+    </plurals>
+    <plurals name="ngp_nudge_text">
+        <item quantity="one">%1$s is waiting on this phone. Is the server on?</item>
+        <item quantity="other">%1$s are waiting on this phone. Is the server on?</item>
+    </plurals>
+
+    <string name="ngp_memory_text">See your photos from this day.</string>
+</resources>
