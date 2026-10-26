@@ -1,0 +1,13 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    MODEL_CACHE=/models \
+    NGP_EXECUTION_PROVIDER=cpu
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app ./app
+
+EXPOSE 8090
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8090"]

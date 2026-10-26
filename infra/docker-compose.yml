@@ -1,0 +1,79 @@
+# Apple Silicon pulls the arm64 variants of these multi-arch images on its own.
+# Do not pin platform: the same file runs on Intel Macs and on Linux.
+name: not-google-photos
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ngp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ngp}
+      POSTGRES_DB: ${POSTGRES_DB:-ngp}
+    ports:
+      - '${POSTGRES_PORT:-54320}:5432'
+    volumes:
+      - ngp-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ngp} -d ${POSTGRES_DB:-ngp}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  server:
+    build:
+      context: ..
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 4810
+      DATABASE_URL: postgres://${POSTGRES_USER:-ngp}:${POSTGRES_PASSWORD:-ngp}@db:5432/${POSTGRES_DB:-ngp}
+      LIBRARY_DIR: /library
+      HOME_URL: ${HOME_URL:-}
+      REMOTE_URL: ${REMOTE_URL:-}
+      ML_URL: ${ML_URL:-}
+      SERVER_NAME: ${SERVER_NAME:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - '${PORT:-4810}:4810'
+    volumes:
+      - type: bind
+        source: ${LIBRARY_DIR:?Set LIBRARY_DIR to an absolute path}
+        target: /library
+        bind:
+          create_host_path: false
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4810/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
+  ml:
+    profiles: ['ml']
+    build:
+      context: ../apps/ml
+    restart: unless-stopped
+    environment:
+      MODEL_CACHE: /models
+      NGP_EXECUTION_PROVIDER: ${NGP_EXECUTION_PROVIDER:-cpu}
+    ports:
+      - '${ML_PORT:-8090}:8090'
+    volumes:
+      - ngp-models:/models
+
+volumes:
+  ngp-postgres:
+  ngp-models:

@@ -1,0 +1,66 @@
+import { Route, Routes } from 'react-router-dom';
+import { PlaceholderPage, Shell } from '@/components/shell';
+import { AdminPage } from '@/pages/admin';
+import { InvitePage } from '@/pages/invite';
+import { LibraryPage } from '@/pages/library';
+import { LoginPage } from '@/pages/login';
+import { SettingsPage } from '@/pages/settings';
+import { SetupPage } from '@/pages/setup';
+import { GuestOnly, RequireAdmin, RequireAuth } from '@/session';
+
+export function App() {
+  return (
+    <Routes>
+      <Route path="/setup" element={<SetupPage />} />
+      <Route path="/invite/:token" element={<InvitePage />} />
+      <Route element={<GuestOnly />}>
+        <Route path="/login" element={<LoginPage />} />
+      </Route>
+      <Route element={<RequireAuth />}>
+        <Route element={<Shell />}>
+          <Route path="/" element={<LibraryPage />} />
+          <Route
+            path="/people"
+            element={
+              <PlaceholderPage
+                title="People"
+                body="Faces already stored with your photos will be grouped into people here. Naming, merging, and hiding them comes with that piece."
+              />
+            }
+          />
+          <Route
+            path="/albums"
+            element={
+              <PlaceholderPage
+                title="Albums"
+                body="Shared albums and live albums will show up here. Membership is already in the database; this screen is the next piece."
+              />
+            }
+          />
+          <Route
+            path="/search"
+            element={
+              <PlaceholderPage
+                title="Search"
+                body="Search by person, place, and what's in the photo arrives with the ML service. Nothing here is sent off this machine."
+              />
+            }
+          />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route element={<RequireAdmin />}>
+            <Route path="/admin" element={<AdminPage />} />
+          </Route>
+          <Route
+            path="*"
+            element={
+              <PlaceholderPage
+                title="That page isn't here"
+                body="The library, settings, and admin pages are the ones that exist so far."
+              />
+            }
+          />
+        </Route>
+      </Route>
+    </Routes>
+  );
+}

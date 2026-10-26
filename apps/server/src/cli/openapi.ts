@@ -7,7 +7,10 @@ import { buildOpenApiDocument } from '@ngp/shared/openapi';
 import { handlers } from '../routes';
 import { VERSION } from '../version';
 
-const document = buildOpenApiDocument({ version: VERSION, implemented: new Set(Object.keys(handlers)) });
+const document = buildOpenApiDocument({
+  version: VERSION,
+  implemented: new Set(Object.keys(handlers)),
+});
 const json = `${JSON.stringify(document, null, 2)}\n`;
 const outIndex = process.argv.indexOf('--out');
 const out = outIndex >= 0 ? process.argv[outIndex + 1] : undefined;
