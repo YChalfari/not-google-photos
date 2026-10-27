@@ -37,6 +37,9 @@ jobs:
           java-version: 21
 
       - uses: android-actions/setup-android@v3
+        with:
+          # The old "tools" package was removed from the SDK. Requesting it fails the job.
+          packages: platform-tools
 
       - name: Install Android SDK 36
         run: |
