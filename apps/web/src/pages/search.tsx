@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AssetDialog } from '@/components/asset-dialog';
+import { FaceAvatar } from '@/components/face-avatar';
 import { PhotoGrid } from '@/components/photo-grid';
 import { EmptyState, ErrorState, LoadingBlock, Page } from '@/components/states';
 import { Button } from '@/components/ui/button';
@@ -157,8 +158,11 @@ export function SearchPage() {
               <h2 className="font-serif text-2xl">People</h2>
               <div className="flex flex-wrap gap-3">
                 {explore.data.people.map((person) => (
-                  <Link key={person.id} to={`/people/${person.id}`} className="text-sm underline-offset-4 hover:underline">
-                    {person.name ?? 'Unnamed'}
+                  <Link key={person.id} to={`/people/${person.id}`} className="flex w-20 flex-col items-center gap-1">
+                    <span className="size-16 overflow-hidden rounded-full bg-secondary">
+                      <FaceAvatar src={person.coverUrl} box={person.coverBox} alt="" />
+                    </span>
+                    <span className="w-full truncate text-center text-xs">{person.name ?? 'Unnamed'}</span>
                   </Link>
                 ))}
               </div>

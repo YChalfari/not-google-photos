@@ -120,6 +120,7 @@ describe('recognition on a library', () => {
 
     const group = listed.data.people.find((person) => person.faceCount === 2);
     expect(group).toBeTruthy();
+    expect(group?.coverBox).toEqual({ x: 0.1, y: 0.1, width: 0.3, height: 0.5 });
     const named = await client.call('people.update', {
       params: { id: group!.id },
       body: { name: 'Maya' },
@@ -157,6 +158,24 @@ describe('recognition on a library', () => {
     expect(after.data.faces[0]?.person).toBeNull();
     const remaining = await client.call('people.get', { params: { id: group!.id } });
     expect(remaining.data.person.faceCount).toBe(1);
+
+    const looseId = after.data.faces[0]!.id;
+    const started = await client.call('faces.update', {
+      params: { id: looseId },
+      body: { createPerson: true },
+    });
+    expect(started.status).toBe(200);
+    expect(started.data.face.personId).toEqual(expect.any(String));
+    expect(started.data.face.personId).not.toBe(group!.id);
+    const newborn = await client.call('people.get', { params: { id: started.data.face.personId! } });
+    expect(newborn.data.person.faceCount).toBe(1);
+    expect(newborn.data.person.name).toBeNull();
+    const moved = await client.call('faces.update', {
+      params: { id: looseId },
+      body: { personId: group!.id },
+    });
+    expect(moved.status).toBe(200);
+    expect(moved.data.face.personId).toBe(group!.id);
   }, 30_000);
 });
 

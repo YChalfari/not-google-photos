@@ -141,11 +141,22 @@ export const peopleHandlers: Handlers = {
       .from(faces)
       .where(and(eq(faces.id, params.id), eq(faces.ownerId, auth.user.id)));
     if (!face) throw new ApiError('not_found', 'That face is not in your library');
-    if (body.personId) await requirePerson(ctx, auth.user.id, body.personId);
+    let nextPersonId: string | null | undefined;
+    if (body.createPerson) {
+      const [created] = await ctx.db
+        .insert(people)
+        .values({ ownerId: auth.user.id })
+        .returning({ id: people.id });
+      if (!created) throw new ApiError('internal_error', 'Could not add that person');
+      nextPersonId = created.id;
+    } else if (body.personId !== undefined) {
+      if (body.personId) await requirePerson(ctx, auth.user.id, body.personId);
+      nextPersonId = body.personId;
+    }
     const [updated] = await ctx.db
       .update(faces)
       .set({
-        ...(body.personId !== undefined ? { personId: body.personId } : {}),
+        ...(nextPersonId !== undefined ? { personId: nextPersonId } : {}),
         ...(body.ignored !== undefined ? { ignored: body.ignored } : {}),
         assignedManually: true,
       })

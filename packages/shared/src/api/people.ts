@@ -11,6 +11,8 @@ export const PersonSummary = z
     isHidden: z.boolean(),
     hideFromMemories: z.boolean(),
     coverUrl: z.string().nullable(),
+    /** Cover face on `coverUrl`, so a group photo can be cropped to one person. */
+    coverBox: FaceBox.nullable(),
   })
   .meta({ id: 'PersonSummary' });
 export type PersonSummary = z.infer<typeof PersonSummary>;
@@ -94,12 +96,13 @@ export const peopleEndpoints = defineEndpoints({
     path: '/api/faces/:id',
     auth: 'user',
     tag: 'people',
-    summary: 'Move a face to another person, unassign it, or ignore it',
-    description: 'Manual changes are never undone by re-clustering.',
+    summary: 'Move a face to another person, start a new person, unassign it, or ignore it',
+    description: 'Manual changes are never undone by re-clustering. createPerson starts a new unnamed person for this face only.',
     params: IdParams,
     body: z.object({
       personId: Id.nullable().optional(),
       ignored: z.boolean().optional(),
+      createPerson: z.boolean().optional(),
     }),
     response: z.object({ face: FaceSummary }),
     errors: ['not_found'],

@@ -50,19 +50,26 @@ export async function personSummaries(
     coverIds.length === 0
       ? []
       : await ctx.db
-          .select({ id: faces.id, assetId: faces.assetId })
+          .select({
+            id: faces.id,
+            assetId: faces.assetId,
+            boxX: faces.boxX,
+            boxY: faces.boxY,
+            boxWidth: faces.boxWidth,
+            boxHeight: faces.boxHeight,
+          })
           .from(faces)
           .where(inArray(faces.id, coverIds));
-  const assetByFace = new Map(faceRows.map((row) => [row.id, row.assetId]));
+  const faceById = new Map(faceRows.map((row) => [row.id, row]));
   const variants = await availableVariants(
     ctx.db,
     faceRows.map((row) => row.assetId),
   );
   return rows.map((row) => {
-    const assetId = row.coverFaceId ? assetByFace.get(row.coverFaceId) : undefined;
+    const face = row.coverFaceId ? faceById.get(row.coverFaceId) : undefined;
     const coverUrl =
-      assetId && variants.get(assetId)?.has('thumbnail')
-        ? ctx.media.sign({ assetId, variant: 'thumbnail', userId }).url
+      face && variants.get(face.assetId)?.has('thumbnail')
+        ? ctx.media.sign({ assetId: face.assetId, variant: 'thumbnail', userId }).url
         : null;
     return {
       id: row.id,
@@ -71,6 +78,20 @@ export async function personSummaries(
       isHidden: row.isHidden,
       hideFromMemories: row.hideFromMemories,
       coverUrl,
+      coverBox: face ? coverBox(face) : null,
     };
   });
+}
+
+function coverBox(row: {
+  boxX: number;
+  boxY: number;
+  boxWidth: number;
+  boxHeight: number;
+}): PersonSummary['coverBox'] {
+  const clamp = (value: number) => Math.min(1, Math.max(0, value));
+  const width = clamp(row.boxWidth);
+  const height = clamp(row.boxHeight);
+  if (width === 0 || height === 0) return null;
+  return { x: clamp(row.boxX), y: clamp(row.boxY), width, height };
 }
