@@ -176,9 +176,61 @@ void App.addListener('backButton', ({ canGoBack }) => {
   else void App.minimizeApp();
 });
 
-void App.addListener('appUrlOpen', (event) => showDeepLink(event.url));
+const PAIR_PREFIX = 'notgooglephotos://pair?';
+
+function pairingFromText(value: string): {
+  code: string;
+  homeUrl?: string;
+  remoteUrl?: string;
+  serverId?: string;
+} | null {
+  const text = value.trim();
+  if (!text.startsWith(PAIR_PREFIX)) return null;
+  const params = new URLSearchParams(text.slice(PAIR_PREFIX.length));
+  const code = params.get('code')?.trim();
+  if (!code) return null;
+  const homeUrl = params.get('home')?.trim() || undefined;
+  const remoteUrl = params.get('remote')?.trim() || undefined;
+  const serverId = params.get('id')?.trim() || undefined;
+  return {
+    code,
+    ...(homeUrl ? { homeUrl } : {}),
+    ...(remoteUrl ? { remoteUrl } : {}),
+    ...(serverId ? { serverId } : {}),
+  };
+}
+
+async function pairFromLink(value: string) {
+  const parsed = pairingFromText(value);
+  if (!parsed) {
+    showDeepLink(value);
+    note('Pair', 'That QR code is not a pairing code.');
+    return;
+  }
+  const home = form.elements.namedItem('homeUrl');
+  if (parsed.homeUrl && home instanceof HTMLInputElement) home.value = parsed.homeUrl;
+  const remote = form.elements.namedItem('remoteUrl');
+  if (parsed.remoteUrl && remote instanceof HTMLInputElement) remote.value = parsed.remoteUrl;
+  const code = form.elements.namedItem('code');
+  if (code instanceof HTMLInputElement) code.value = parsed.code;
+  await call('Pair', () => PhotoSync.pair(parsed));
+  await refresh();
+}
+
+document.querySelector('#scan')!.addEventListener('click', () => {
+  void call('Scan', () => PhotoSync.scanQrCode()).then((result) => {
+    if (result?.value) void pairFromLink(result.value);
+  });
+});
+
+void App.addListener('appUrlOpen', (event) => {
+  if (event.url.startsWith(PAIR_PREFIX)) void pairFromLink(event.url);
+  else showDeepLink(event.url);
+});
 void App.getLaunchUrl().then((launch) => {
-  if (launch?.url) showDeepLink(launch.url);
+  if (!launch?.url) return;
+  if (launch.url.startsWith(PAIR_PREFIX)) void pairFromLink(launch.url);
+  else showDeepLink(launch.url);
 });
 
 void refresh();

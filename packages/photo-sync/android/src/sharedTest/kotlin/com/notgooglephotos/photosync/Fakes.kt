@@ -196,6 +196,7 @@ class FakeSyncServer {
     var memoriesBody = """{"memories":[]}"""
     var cover = ByteArray(8) { it.toByte() }
     var pairToken = "paired-token"
+    var lastPairBody: String? = null
 
     data class Upload(
         val checksum: String,
@@ -241,9 +242,11 @@ class FakeSyncServer {
         return when {
             path.endsWith("/api/devices/pair") -> {
                 pairs++
-                val code = JSONObject(request.body.readUtf8()).optString("code")
+                val raw = request.body.readUtf8()
+                lastPairBody = raw
+                val code = JSONObject(raw).optString("code")
                 if (code.isBlank()) json(400, """{"message":"Missing code"}""")
-                else json(200, """{"deviceToken":"$pairToken","serverId":"$serverId","deviceId":"dev-1","user":{"name":"Ada"}}""")
+                else json(200, """{"deviceToken":"$pairToken","deviceId":"dev-1","user":{"name":"Ada"},"server":{"serverId":"$serverId","name":"Home","homeUrl":null,"remoteUrl":null}}""")
             }
             path.endsWith("/api/assets/check") -> json(200, checkBody(JSONObject(request.body.readUtf8())))
             path.endsWith("/api/assets") -> upload(request)

@@ -81,6 +81,12 @@ class SyncApiClientTest {
         assertTrue(paired is ApiResult.Ok)
         assertEquals("paired-token", (paired as ApiResult.Ok).value.deviceToken)
         assertEquals("Ada", paired.value.userName)
+        assertEquals("srv-1", paired.value.serverId)
+        val sent = org.json.JSONObject(server.lastPairBody)
+        assertEquals("code", sent.getString("method"))
+        assertEquals("one-time", sent.getString("code"))
+        assertEquals("Pixel", sent.getJSONObject("device").getString("name"))
+        assertEquals("android", sent.getJSONObject("device").getString("platform"))
     }
 
     @Test

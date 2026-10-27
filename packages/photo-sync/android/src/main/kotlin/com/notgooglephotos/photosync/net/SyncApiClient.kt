@@ -39,7 +39,7 @@ import kotlin.coroutines.resumeWithException
  * through this class; endpoint paths, headers, and field names live only here.
  *
  *   GET  /api/health             reachability probe, no auth, short timeouts, no retries
- *   POST /api/devices/pair       JSON {code, deviceName, platform} -> {deviceToken, serverId?, deviceId?, user?}
+ *   POST /api/devices/pair       JSON {method:"code", code, device:{name, platform}} -> {deviceToken, deviceId, user, server}
  *   POST /api/assets/check       JSON {checksums: [sha1-hex]} -> {missing: [...], present: [{checksum, assetId}]}
  *   POST /api/assets             multipart/form-data, streamed: metadata fields, then the `file` part
  *   GET  /api/memories/upcoming  {memories: [{id, title, subtitle?, date: yyyy-MM-dd, coverUrl?}]}
@@ -69,7 +69,11 @@ class SyncApiClient internal constructor(
 
     /** Redeems a one-time pairing code (from the server's pairing QR code) for a device token. */
     suspend fun pair(code: String, deviceName: String): ApiResult<PairResult> {
-        val payload = JSONObject().put("code", code).put("deviceName", deviceName).put("platform", PLATFORM).toString()
+        val payload = JSONObject()
+            .put("method", "code")
+            .put("code", code)
+            .put("device", JSONObject().put("name", deviceName).put("platform", PLATFORM))
+            .toString()
         val request = Request.Builder().url(endpoint(PAIR)).post(payload.toRequestBody(JSON)).build()
         return call(request, ::parsePair)
     }
@@ -205,9 +209,10 @@ class SyncApiClient internal constructor(
             val json = JSONObject(body)
             val token = json.optNonBlank("deviceToken") ?: json.optNonBlank("token") ?: throw JSONException("no deviceToken")
             val user = json.optJSONObject("user")
+            val server = json.optJSONObject("server")
             return PairResult(
                 deviceToken = token,
-                serverId = json.optNonBlank("serverId"),
+                serverId = json.optNonBlank("serverId") ?: server?.optNonBlank("serverId"),
                 deviceId = json.optNonBlank("deviceId") ?: json.optJSONObject("device")?.optNonBlank("id"),
                 userName = user?.let { it.optNonBlank("name") ?: it.optNonBlank("displayName") ?: it.optNonBlank("email") },
             )
@@ -271,7 +276,8 @@ class SyncApiClient internal constructor(
 
         private fun errorMessage(code: Int, body: String): String {
             val json = body.toJsonObjectOrNull()
-            val message = json?.optNonBlank("message") ?: json?.optNonBlank("error") ?: body.take(200).ifBlank { null }
+            val nested = json?.optJSONObject("error")?.optNonBlank("message")
+            val message = json?.optNonBlank("message") ?: nested ?: json?.optNonBlank("error") ?: body.take(200).ifBlank { null }
             return if (message != null) "HTTP $code: $message" else "HTTP $code"
         }
     }

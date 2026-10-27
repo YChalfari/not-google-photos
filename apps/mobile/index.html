@@ -36,13 +36,14 @@
 
       <section class="card">
         <h2>Server</h2>
-        <p class="hint">On your home network the address can be plain HTTP. Away from home it has to be HTTPS.</p>
+        <p class="hint">The website is port 4811. This phone talks to the server on port 4810. On your home network that address can be plain HTTP. Away from home it has to be HTTPS.</p>
         <form id="connect" class="stack">
           <label>Home address <input name="homeUrl" type="url" inputmode="url" placeholder="http://192.168.1.20:4810" autocomplete="off" /></label>
           <label>Away address <input name="remoteUrl" type="url" inputmode="url" placeholder="https://photos.example.com" autocomplete="off" /></label>
           <label>Pairing code <input name="code" inputmode="text" autocomplete="off" spellcheck="false" /></label>
           <div class="row">
             <button type="submit">Pair this phone</button>
+            <button type="button" id="scan" class="ghost">Scan QR code</button>
             <button type="button" id="save-address" class="ghost">Save address</button>
             <button type="button" id="discover" class="ghost">Find on the network</button>
           </div>
