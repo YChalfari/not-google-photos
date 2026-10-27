@@ -1,19 +1,22 @@
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { PgBoss } from 'pg-boss';
 import type { AppContext } from '../context';
 import { assets } from '../db/schema';
 import { processAsset } from '../media/derivatives';
+import { recognizeAsset } from '../recognition/recognize';
 import { cleanupExpired, collectUnreferencedFiles } from './maintenance';
 
 /**
  * Queue names. Each handler is idempotent so jobs can be retried and re-run.
- * Face grouping and search embeddings will add their own queues later.
+ * Recognition groups faces into people and writes the search tags.
  */
 export const QUEUES = {
   cleanup: 'maintenance.cleanup',
   collectFiles: 'maintenance.collect-files',
   derivatives: 'asset.derivatives',
   derivativesSweep: 'asset.derivatives.sweep',
+  recognize: 'asset.recognize',
+  recognizeSweep: 'asset.recognize.sweep',
 } as const;
 
 export const JOBS_SCHEMA = 'pgboss';
@@ -24,6 +27,8 @@ export interface Jobs {
   stop(): Promise<void>;
   /** Queue thumbnail and EXIF work for one asset. A second send while one is queued is a no-op. */
   enqueueAsset(assetId: string): Promise<void>;
+  /** Queue face grouping and tags. A second send while one is queued is a no-op. */
+  enqueueRecognition(assetId: string): Promise<void>;
 }
 
 /** Starts pg-boss (in the same Postgres, schema `pgboss`), its schedules, and the workers. */
@@ -45,12 +50,34 @@ export async function startJobs(ctx: AppContext): Promise<Jobs> {
     retryDelay: 30,
   });
   await boss.createQueue(QUEUES.derivativesSweep, { retryLimit: 1, expireInSeconds: 600 });
+  await boss.createQueue(QUEUES.recognize, { retryLimit: 8, expireInSeconds: 180, retryDelay: 20 });
+  await boss.createQueue(QUEUES.recognizeSweep, { retryLimit: 1, expireInSeconds: 600 });
   await boss.schedule(QUEUES.cleanup, '17 * * * *');
   await boss.schedule(QUEUES.collectFiles, '30 4 * * *');
   await boss.schedule(QUEUES.derivativesSweep, '*/10 * * * *');
+  await boss.schedule(QUEUES.recognizeSweep, '*/2 * * * *');
 
   const enqueueAsset = async (assetId: string) => {
     await boss.send(QUEUES.derivatives, { assetId }, { singletonKey: assetId });
+  };
+  const enqueueRecognition = async (assetId: string) => {
+    await boss.send(QUEUES.recognize, { assetId }, { singletonKey: assetId });
+  };
+  const enqueueUnrecognised = async () => {
+    if (!ctx.env.ML_URL) return 0;
+    const pending = await ctx.db
+      .select({ id: assets.id })
+      .from(assets)
+      .where(
+        and(
+          eq(assets.processingState, 'ready'),
+          isNull(assets.trashedAt),
+          sql`coalesce(${assets.processingSteps}->>'faces', 'pending') = 'pending'`,
+        ),
+      )
+      .limit(2000);
+    for (const row of pending) await enqueueRecognition(row.id);
+    return pending.length;
   };
   const enqueuePending = async () => {
     const pending = await ctx.db
@@ -77,15 +104,36 @@ export async function startJobs(ctx: AppContext): Promise<Jobs> {
     const queued = await enqueuePending();
     if (queued > 0) log.info({ queued }, 'Queued photos that still need thumbnails');
   });
+  await boss.work<{ assetId: string }>(
+    QUEUES.recognize,
+    { localConcurrency: 1, batchSize: 1 },
+    async (jobs) => {
+      for (const job of jobs) {
+        try {
+          await recognizeAsset(ctx, job.data.assetId);
+        } catch (error) {
+          log.warn({ err: error, assetId: job.data.assetId }, 'Recognition will retry');
+          throw error;
+        }
+      }
+    },
+  );
+  await boss.work(QUEUES.recognizeSweep, async () => {
+    const queued = await enqueueUnrecognised();
+    if (queued > 0) log.info({ queued }, 'Queued photos that still need people and tags');
+  });
 
   const queued = await enqueuePending();
   if (queued > 0) log.info({ queued }, 'Queued photos that still need thumbnails');
+  const unrecognised = await enqueueUnrecognised();
+  if (unrecognised > 0) log.info({ queued: unrecognised }, 'Queued photos that still need people and tags');
 
   let running = true;
   return {
     boss,
     isRunning: () => running,
     enqueueAsset,
+    enqueueRecognition,
     stop: async () => {
       running = false;
       await boss.stop({ graceful: true, timeout: 10_000 });

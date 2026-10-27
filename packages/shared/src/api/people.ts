@@ -24,6 +24,7 @@ export const FaceSummary = z
     ignored: z.boolean(),
   })
   .meta({ id: 'FaceSummary' });
+export type FaceSummary = z.infer<typeof FaceSummary>;
 
 export const peopleEndpoints = defineEndpoints({
   'people.list': {

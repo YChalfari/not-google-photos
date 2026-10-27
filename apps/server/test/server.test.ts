@@ -70,7 +70,9 @@ describe('health, identity, and the contract surface', () => {
       'x-implemented': true,
     });
     expect(doc.paths['/api/assets']?.post?.['x-implemented']).toBe(true);
-    expect(doc.paths['/api/people']?.get?.['x-implemented']).toBe(false);
+    expect(doc.paths['/api/people']?.get?.['x-implemented']).toBe(true);
+    expect(doc.paths['/api/search']?.get?.['x-implemented']).toBe(true);
+    expect(doc.paths['/api/albums']?.get?.['x-implemented']).toBe(false);
   });
 
   it('answers unimplemented endpoints with 501 after the auth check', async () => {
@@ -79,12 +81,17 @@ describe('health, identity, and the contract surface', () => {
 
     await createUser(t.ctx, { email: 'alex@example.com', role: 'admin' });
     const client = await signIn(t.app, 'alex@example.com');
-    const search = await client.call('search.query');
-    expect(search.status).toBe(501);
-    expect(search.error?.code).toBe('not_implemented');
+    const albums = await client.call('albums.list');
+    expect(albums.status).toBe(501);
+    expect(albums.error?.code).toBe('not_implemented');
 
     const people = await client.call('people.list');
-    expect(people.status).toBe(501);
+    expect(people.status).toBe(200);
+    expect(people.data.people).toEqual([]);
+
+    const search = await client.call('search.query', { query: { q: 'cake' } });
+    expect(search.status).toBe(200);
+    expect(search.data.items).toEqual([]);
   });
 
   it('serves the web app, its assets, and client-side routes', async () => {

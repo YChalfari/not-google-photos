@@ -5,6 +5,8 @@ import { authHandlers } from './auth';
 import { deviceHandlers } from './devices';
 import { inviteHandlers } from './invites';
 import { mediaHandlers } from './media';
+import { peopleHandlers } from './people';
+import { searchHandlers } from './search';
 import { serverHandlers } from './server';
 import { timelineHandlers } from './timeline';
 
@@ -21,4 +23,6 @@ export const handlers: Handlers = {
   ...mediaHandlers,
   ...assetHandlers,
   ...timelineHandlers,
+  ...peopleHandlers,
+  ...searchHandlers,
 };

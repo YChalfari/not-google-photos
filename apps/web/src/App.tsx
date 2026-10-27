@@ -4,6 +4,8 @@ import { AdminPage } from '@/pages/admin';
 import { InvitePage } from '@/pages/invite';
 import { LibraryPage } from '@/pages/library';
 import { LoginPage } from '@/pages/login';
+import { PeoplePage, PersonPage } from '@/pages/people';
+import { SearchPage } from '@/pages/search';
 import { SettingsPage } from '@/pages/settings';
 import { SetupPage } from '@/pages/setup';
 import { GuestOnly, RequireAdmin, RequireAuth } from '@/session';
@@ -19,15 +21,8 @@ export function App() {
       <Route element={<RequireAuth />}>
         <Route element={<Shell />}>
           <Route path="/" element={<LibraryPage />} />
-          <Route
-            path="/people"
-            element={
-              <PlaceholderPage
-                title="People"
-                body="Faces already stored with your photos will be grouped into people here. Naming, merging, and hiding them comes with that piece."
-              />
-            }
-          />
+          <Route path="/people" element={<PeoplePage />} />
+          <Route path="/people/:id" element={<PersonPage />} />
           <Route
             path="/albums"
             element={
@@ -37,15 +32,7 @@ export function App() {
               />
             }
           />
-          <Route
-            path="/search"
-            element={
-              <PlaceholderPage
-                title="Search"
-                body="Search by person, place, and what's in the photo arrives with the ML service. Nothing here is sent off this machine."
-              />
-            }
-          />
+          <Route path="/search" element={<SearchPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="/admin" element={<AdminPage />} />

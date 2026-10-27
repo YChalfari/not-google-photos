@@ -5,6 +5,7 @@ import sharp from 'sharp';
 import { rgbaToThumbHash } from 'thumbhash';
 import type { AppContext } from '../context';
 import { assetFiles, assets, type AssetRow, type FileRow } from '../db/schema';
+import { scheduleRecognition } from '../recognition/recognize';
 import { LocalStorageProvider } from '../storage/local';
 import { partsFromExif } from './time';
 
@@ -195,6 +196,7 @@ export async function processAsset(
     if (!picture) {
       steps.thumbnails = 'skipped';
       await mark(ctx, asset, steps, 'ready', exif);
+      await recognizeLater(ctx, asset.id);
       return;
     }
 
@@ -210,6 +212,7 @@ export async function processAsset(
       height: size?.height,
       thumbhash,
     });
+    await recognizeLater(ctx, asset.id);
   } catch (error) {
     steps.thumbnails = 'failed';
     await mark(ctx, asset, steps, 'failed');
@@ -270,6 +273,15 @@ async function mark(
       ...(exif?.extra ? { exif: exif.extra } : {}),
     })
     .where(eq(assets.id, asset.id));
+}
+
+/** Face grouping runs after thumbnails. A failure here must not mark the photo itself as failed. */
+async function recognizeLater(ctx: AppContext, assetId: string): Promise<void> {
+  try {
+    await scheduleRecognition(ctx, assetId);
+  } catch (error) {
+    ctx.log.warn({ err: error, assetId }, 'Recognition did not finish');
+  }
 }
 
 /** Runs thumbnail work now when the queue is off (tests, and a server started without jobs). */

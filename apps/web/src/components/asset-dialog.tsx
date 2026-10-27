@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Heart, Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { thumbHashToDataURL } from 'thumbhash';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -35,6 +36,13 @@ export function AssetDialog({ assetId, onClose }: { assetId: string | null; onCl
 
   const asset = detail.data;
   const image = asset?.previewUrl ?? asset?.originalUrl ?? placeholder(asset?.thumbhash ?? null);
+  const people: { id: string; name: string | null }[] = [];
+  const seenPeople = new Set<string>();
+  for (const face of asset?.faces ?? []) {
+    if (!face.person || seenPeople.has(face.person.id)) continue;
+    seenPeople.add(face.person.id);
+    people.push(face.person);
+  }
 
   return (
     <Dialog open={assetId !== null} onOpenChange={(open) => !open && onClose()}>
@@ -73,6 +81,36 @@ export function AssetDialog({ assetId, onClose }: { assetId: string | null; onCl
                   {asset.camera?.model ? ` · ${asset.camera.model}` : ''}
                 </p>
               </div>
+              {people.length > 0 || (asset.tags.length > 0) ? (
+                <div className="flex flex-col gap-2 text-sm">
+                  {people.map((person) => (
+                    <Link
+                      key={person.id}
+                      to={`/people/${person.id}`}
+                      onClick={onClose}
+                      className="text-primary underline-offset-4 hover:underline"
+                    >
+                      {person.name ?? 'Unnamed person'}
+                    </Link>
+                  ))}
+                  {asset.tags.length > 0 ? (
+                    <p className="text-muted-foreground">
+                      {asset.tags.map((tag, index) => (
+                        <span key={tag.name}>
+                          {index > 0 ? ', ' : ''}
+                          <Link
+                            to={`/search?q=${encodeURIComponent(tag.name)}`}
+                            onClick={onClose}
+                            className="text-primary underline-offset-4 hover:underline"
+                          >
+                            {tag.name}
+                          </Link>
+                        </span>
+                      ))}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant={asset.isFavorite ? 'default' : 'outline'}
