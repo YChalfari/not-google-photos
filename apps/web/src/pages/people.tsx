@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AssetDialog } from '@/components/asset-dialog';
 import { FaceAvatar } from '@/components/face-avatar';
@@ -62,6 +62,12 @@ export function PersonPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [photoChoice, setPhotoChoice] = useState<{ personId: string; choosing: boolean }>({
+    personId: id,
+    choosing: false,
+  });
+  const photosRef = useRef<HTMLDivElement>(null);
+  const choosingPhoto = photoChoice.personId === id && photoChoice.choosing;
   const person = useQuery({
     queryKey: ['people', id],
     queryFn: () => api('people.get', { params: { id } }),
@@ -114,6 +120,7 @@ export function PersonPage() {
     mutationFn: (assetId: string) =>
       api('people.update', { params: { id }, body: { coverAssetId: assetId } }),
     onSuccess: async () => {
+      setPhotoChoice({ personId: id, choosing: false });
       await queryClient.invalidateQueries({ queryKey: ['people'] });
     },
   });
@@ -151,19 +158,34 @@ export function PersonPage() {
       ) : null}
       {person.data ? (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <span className="size-24 shrink-0 overflow-hidden rounded-full bg-secondary">
-            {person.data.person.coverUrl ? (
-              <FaceAvatar
-                src={person.data.person.coverUrl}
-                box={person.data.person.coverBox}
-                alt={person.data.person.name ?? 'Unnamed'}
-              />
-            ) : (
-              <span className="flex h-full items-center justify-center text-2xl text-muted-foreground">
-                {(person.data.person.name ?? '?').slice(0, 1)}
-              </span>
-            )}
-          </span>
+          <div className="flex shrink-0 flex-col items-center gap-2">
+            <span className="size-24 overflow-hidden rounded-full bg-secondary">
+              {person.data.person.coverUrl ? (
+                <FaceAvatar
+                  src={person.data.person.coverUrl}
+                  box={person.data.person.coverBox}
+                  alt={person.data.person.name ?? 'Unnamed'}
+                />
+              ) : (
+                <span className="flex h-full items-center justify-center text-2xl text-muted-foreground">
+                  {(person.data.person.name ?? '?').slice(0, 1)}
+                </span>
+              )}
+            </span>
+            {photos.data && photos.data.items.length > 0 ? (
+              <button
+                type="button"
+                className="text-sm text-primary underline-offset-4 hover:underline"
+                onClick={() => {
+                  const choosing = !choosingPhoto;
+                  setPhotoChoice({ personId: id, choosing });
+                  if (choosing) photosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }}
+              >
+                {choosingPhoto ? 'Cancel' : 'Change photo'}
+              </button>
+            ) : null}
+          </div>
           <form
             className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center"
             onSubmit={(event) => {
@@ -263,28 +285,21 @@ export function PersonPage() {
         <EmptyState title="No photos" body="Faces grouped with this person will show up here." />
       ) : null}
       {photos.data && photos.data.items.length > 0 ? (
-        <div className="flex flex-col gap-3">
-          <div>
-            <p className="text-sm font-medium">Main photo</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Pick the photo used for this person. Merging does not replace it.
-            </p>
-          </div>
-          {chooseMain.isError ? <ErrorState title="Couldn't change the main photo" error={chooseMain.error} /> : null}
+        <div ref={photosRef} className="flex flex-col gap-3">
+          {choosingPhoto ? (
+            <p className="text-sm text-muted-foreground">Choose a photo for this person.</p>
+          ) : null}
+          {chooseMain.isError ? <ErrorState title="Couldn't change the photo" error={chooseMain.error} /> : null}
           <PhotoGrid
             assets={photos.data.items}
-            mainAssetId={person.data?.person.coverAssetId}
-            onMakeMain={(assetId) => chooseMain.mutate(assetId)}
-            onOpen={setOpenId}
+            onOpen={(assetId) => {
+              if (choosingPhoto) chooseMain.mutate(assetId);
+              else setOpenId(assetId);
+            }}
           />
         </div>
       ) : null}
-      <AssetDialog
-        assetId={openId}
-        focusPersonId={id}
-        mainAssetId={person.data?.person.coverAssetId}
-        onClose={() => setOpenId(null)}
-      />
+      <AssetDialog assetId={openId} focusPersonId={id} onClose={() => setOpenId(null)} />
     </Page>
   );
 }
