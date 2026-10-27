@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { api, errorMessage } from '@/lib/api';
+import { assetUrl } from '@/lib/native';
 import { formatBytes, formatWhen } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -56,7 +57,8 @@ export function AssetDialog({
   });
 
   const asset = detail.data;
-  const image = asset?.previewUrl ?? asset?.originalUrl ?? placeholder(asset?.thumbhash ?? null);
+  const image =
+    assetUrl(asset?.previewUrl ?? asset?.originalUrl) ?? placeholder(asset?.thumbhash ?? null);
   const faces = asset?.faces ?? [];
   const preferred = faces.find((face) => face.person?.id === focusPersonId) ?? faces[0] ?? null;
   const selected = faces.find((face) => face.id === selectedId) ?? preferred;
@@ -77,7 +79,7 @@ export function AssetDialog({
             <div className="flex min-h-64 min-w-0 flex-1 items-center justify-center bg-[#1c1915]">
               {asset.type === 'video' ? (
                 <video
-                  src={asset.playbackUrl ?? asset.originalUrl ?? undefined}
+                  src={assetUrl(asset.playbackUrl ?? asset.originalUrl)}
                   poster={image}
                   controls
                   className="max-h-[70vh] w-full"
@@ -156,7 +158,10 @@ export function AssetDialog({
                   size="sm"
                   disabled={update.isPending}
                   onClick={() => {
-                    update.mutate({ isTrashed: asset.trashedAt === null }, { onSuccess: () => onClose() });
+                    update.mutate(
+                      { isTrashed: asset.trashedAt === null },
+                      { onSuccess: () => onClose() },
+                    );
                   }}
                 >
                   <Trash2 />
@@ -164,7 +169,10 @@ export function AssetDialog({
                 </Button>
               </div>
               {asset.originalUrl ? (
-                <a className="text-sm text-primary underline-offset-4 hover:underline" href={asset.originalUrl}>
+                <a
+                  className="text-sm text-primary underline-offset-4 hover:underline"
+                  href={assetUrl(asset.originalUrl)}
+                >
                   Download original
                 </a>
               ) : null}
@@ -199,7 +207,9 @@ function FacePhoto({
           aria-pressed={face.id === selectedId}
           className={cn(
             'absolute rounded-sm border-2 shadow-[0_0_0_1px_rgba(0,0,0,0.65)]',
-            face.id === selectedId ? 'border-white bg-white/15' : 'border-white/75 hover:bg-white/10',
+            face.id === selectedId
+              ? 'border-white bg-white/15'
+              : 'border-white/75 hover:bg-white/10',
           )}
           style={{
             left: `${face.box.x * 100}%`,
@@ -280,7 +290,8 @@ function FaceEditor({
     },
   });
   const createPerson = useMutation({
-    mutationFn: () => api('faces.update', { params: { id: selected.id }, body: { createPerson: true } }),
+    mutationFn: () =>
+      api('faces.update', { params: { id: selected.id }, body: { createPerson: true } }),
     onSuccess: async () => {
       await refresh();
     },
@@ -308,7 +319,8 @@ function FaceEditor({
       <div>
         <p className="text-sm font-medium">Faces in this photo</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Click a face to choose who you are naming. Naming saves the whole group. Moving changes only this face.
+          Click a face to choose who you are naming. Naming saves the whole group. Moving changes
+          only this face.
         </p>
       </div>
       <div className="flex gap-2 overflow-x-auto" role="group" aria-label="Faces in this photo">
@@ -329,7 +341,9 @@ function FaceEditor({
             >
               <FaceAvatar src={cropSrc} box={face.box} alt="" />
             </span>
-            <span className="w-full truncate text-center text-xs">{face.person?.name ?? 'Unnamed'}</span>
+            <span className="w-full truncate text-center text-xs">
+              {face.person?.name ?? 'Unnamed'}
+            </span>
           </button>
         ))}
       </div>
@@ -387,7 +401,11 @@ function FaceEditor({
         {choices.length === 0 ? (
           <p className="text-sm text-muted-foreground">No one else to move this face to.</p>
         ) : (
-          <div className="grid max-h-40 grid-cols-4 gap-2 overflow-y-auto" role="group" aria-label="Move only this face to">
+          <div
+            className="grid max-h-40 grid-cols-4 gap-2 overflow-y-auto"
+            role="group"
+            aria-label="Move only this face to"
+          >
             {choices.map((person) => (
               <button
                 key={person.id}
@@ -405,7 +423,9 @@ function FaceEditor({
                 >
                   <FaceAvatar src={person.coverUrl} box={person.coverBox} alt="" />
                 </span>
-                <span className="w-full truncate text-center text-xs">{person.name ?? 'Unnamed'}</span>
+                <span className="w-full truncate text-center text-xs">
+                  {person.name ?? 'Unnamed'}
+                </span>
               </button>
             ))}
           </div>
@@ -422,11 +442,23 @@ function FaceEditor({
       </div>
       <div className="flex flex-wrap gap-2">
         {personId ? (
-          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => reject.mutate()}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => reject.mutate()}
+          >
             Not this person
           </Button>
         ) : null}
-        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => createPerson.mutate()}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => createPerson.mutate()}
+        >
           New person
         </Button>
       </div>

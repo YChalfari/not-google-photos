@@ -1,37 +1,71 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { LoadingBlock } from '@/components/states';
 import { ApiClientError, api } from '@/lib/api';
+import {
+  clearDeviceConnection,
+  isLaunchFinished,
+  refreshDeviceConnection,
+  subscribeLaunch,
+  usesDeviceAuth,
+} from '@/lib/native';
 import { SessionContext, useSession, type SessionValue } from '@/session-context';
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const deviceAuth = usesDeviceAuth();
+  const [launchReady, setLaunchReady] = useState(isLaunchFinished);
+  useEffect(() => subscribeLaunch(() => setLaunchReady(true)), []);
+  const connection = useQuery({
+    queryKey: ['device', 'connection'],
+    enabled: deviceAuth && launchReady,
+    retry: false,
+    queryFn: () => refreshDeviceConnection(),
+  });
+  const paired = deviceAuth && connection.data === true;
+  const connectionReady =
+    !deviceAuth || (launchReady && (connection.isSuccess || connection.isError));
+  const canTalk = !deviceAuth || paired;
+
   const info = useQuery({
     queryKey: ['server', 'info'],
+    enabled: canTalk,
     queryFn: () => api('server.info'),
   });
   const me = useQuery({
     queryKey: ['auth', 'me'],
-    enabled: Boolean(info.data && !info.data.setupRequired),
+    enabled: Boolean(canTalk && info.data && !info.data.setupRequired),
     retry: false,
     queryFn: async () => {
       try {
         return await api('auth.me');
       } catch (error) {
-        if (error instanceof ApiClientError && error.status === 401) return null;
+        if (error instanceof ApiClientError && error.status === 401) {
+          if (usesDeviceAuth()) {
+            await clearDeviceConnection();
+            queryClient.setQueryData(['device', 'connection'], false);
+          }
+          return null;
+        }
         throw error;
       }
     },
   });
 
-  const ready = info.isSuccess && (info.data.setupRequired || me.isSuccess || me.isError);
+  const serverSettled = info.isSuccess
+    ? Boolean(info.data.setupRequired || me.isSuccess || me.isError)
+    : info.isError;
+  const ready = connectionReady && (deviceAuth && !paired ? true : serverSettled);
+
   const value: SessionValue = {
     info: info.data,
     infoError: info.error,
     me: me.data,
     meError: me.error,
     ready,
+    deviceAuth,
+    paired,
     refresh: async () => {
       await queryClient.invalidateQueries();
     },
@@ -42,8 +76,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
 export function RequireAuth() {
   const location = useLocation();
-  const { info, me, ready, infoError, meError } = useSession();
+  const { info, me, ready, infoError, meError, deviceAuth, paired } = useSession();
   if (!ready) return <LoadingBlock label="Checking your session" />;
+  if (deviceAuth && !paired) {
+    return <Navigate to="/connect" replace state={{ from: location.pathname }} />;
+  }
   if (infoError || !info) {
     return (
       <div className="mx-auto max-w-md px-6 py-16">
@@ -62,7 +99,15 @@ export function RequireAuth() {
       </div>
     );
   }
-  if (!me) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!me) {
+    return (
+      <Navigate
+        to={deviceAuth ? '/connect' : '/login'}
+        replace
+        state={{ from: location.pathname }}
+      />
+    );
+  }
   return <Outlet />;
 }
 
@@ -73,8 +118,9 @@ export function RequireAdmin() {
 }
 
 export function GuestOnly() {
-  const { info, me, ready } = useSession();
+  const { info, me, ready, deviceAuth, paired } = useSession();
   if (!ready) return <LoadingBlock label="Checking your session" />;
+  if (deviceAuth) return <Navigate to={paired ? '/' : '/connect'} replace />;
   if (info?.setupRequired) return <Navigate to="/setup" replace />;
   if (me) return <Navigate to="/" replace />;
   return <Outlet />;

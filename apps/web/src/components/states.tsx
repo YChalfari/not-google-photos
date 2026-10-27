@@ -12,7 +12,7 @@ export function Page({
   title: string;
   lede?: string;
   wide?: boolean;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <div className={cn('mx-auto flex w-full flex-col gap-6', wide ? 'max-w-6xl' : 'max-w-3xl')}>

@@ -5,6 +5,7 @@ import {
   type RequestOf,
   type ResponseOf,
 } from '@ngp/shared';
+import { nativeFetchParts } from '@/lib/native';
 
 export class ApiClientError extends Error {
   constructor(
@@ -54,11 +55,12 @@ export async function api<K extends EndpointKey>(
 
   const headers = new Headers();
   if (input.body !== undefined) headers.set('content-type', 'application/json');
-  const response = await fetch(path, {
+  const { url, credentials } = nativeFetchParts(path, headers);
+  const response = await fetch(url, {
     method: spec.method,
     headers,
     body: input.body === undefined ? undefined : JSON.stringify(input.body),
-    credentials: 'include',
+    credentials,
     signal: init.signal,
   });
 

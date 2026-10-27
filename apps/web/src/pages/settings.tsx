@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { ErrorState, Field, FormError, LoadingBlock, Page } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
@@ -16,13 +17,19 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { unpairThisPhone } from '@/lib/device';
 import { formText } from '@/lib/form';
+import { usesDeviceAuth } from '@/lib/native';
 import { formatBytes, formatWhen } from '@/lib/format';
 import { useSession } from '@/session-context';
 
 export function SettingsPage() {
   const { me, refresh } = useSession();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const deviceAuth = usesDeviceAuth();
+  const [unpairError, setUnpairError] = useState<unknown>(null);
+  const [unpairing, setUnpairing] = useState(false);
   const storage = useQuery({ queryKey: ['me', 'storage'], queryFn: () => api('me.storage') });
   const devices = useQuery({ queryKey: ['devices'], queryFn: () => api('devices.list') });
 
@@ -206,7 +213,7 @@ export function SettingsPage() {
                     className="max-w-xs"
                   />
                   <Badge variant="outline">{device.platform}</Badge>
-                  {device.isCurrent ? <Badge>This browser</Badge> : null}
+                  {device.isCurrent ? <Badge>This device</Badge> : null}
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
                   Last seen {formatWhen(device.lastSeenAt)} · added {formatWhen(device.createdAt)}
@@ -252,6 +259,41 @@ export function SettingsPage() {
           <FormError error={rename.error ?? revoke.error} />
         </CardContent>
       </Card>
+
+      {deviceAuth ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>This phone</CardTitle>
+            <CardDescription>
+              Unpairing revokes this phone's key. It stops uploading until you pair it again.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-start gap-3">
+            <FormError error={unpairError} />
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={unpairing}
+              onClick={() => {
+                setUnpairing(true);
+                setUnpairError(null);
+                void unpairThisPhone()
+                  .then(async () => {
+                    queryClient.setQueryData(['device', 'connection'], false);
+                    await refresh();
+                    void navigate('/connect');
+                  })
+                  .catch((caught: unknown) => {
+                    setUnpairError(caught);
+                    setUnpairing(false);
+                  });
+              }}
+            >
+              {unpairing ? 'Unpairing…' : 'Unpair this phone'}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
     </Page>
   );
 }

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
+import { assetUrl } from '@/lib/native';
 
 export interface FaceCrop {
   x: number;
@@ -40,7 +41,8 @@ export function FaceAvatar({
     };
   }, [src, box]);
 
-  if (!src) {
+  const resolved = assetUrl(src);
+  if (!resolved) {
     return (
       <span className="flex h-full w-full items-center justify-center bg-secondary text-muted-foreground">
         ?
@@ -50,7 +52,7 @@ export function FaceAvatar({
 
   return (
     <span ref={frame} className="relative block h-full w-full overflow-hidden bg-secondary">
-      <img ref={image} src={src} alt={alt} draggable={false} className="absolute max-w-none" />
+      <img ref={image} src={resolved} alt={alt} draggable={false} className="absolute max-w-none" />
     </span>
   );
 }
@@ -60,7 +62,15 @@ function positionFace(frame: HTMLElement, image: HTMLImageElement, box: FaceCrop
   const frameH = frame.clientHeight;
   const naturalW = image.naturalWidth;
   const naturalH = image.naturalHeight;
-  if (!frameW || !frameH || !naturalW || !naturalH || !box || box.width < 0.02 || box.height < 0.02) {
+  if (
+    !frameW ||
+    !frameH ||
+    !naturalW ||
+    !naturalH ||
+    !box ||
+    box.width < 0.02 ||
+    box.height < 0.02
+  ) {
     image.style.objectFit = 'cover';
     image.style.width = '100%';
     image.style.height = '100%';

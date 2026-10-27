@@ -68,6 +68,12 @@ The app stores two addresses and prefers the home one when it answers.
 
 Either way, pairing codes include both addresses. On the home network the phone uses the home one, including after it learns a new IP from Bonjour.
 
+## The phone
+
+The Android app is the web app in a Capacitor shell, plus the native backup engine. Browsers sign in with the session cookie. The installed app is served from `http://localhost`, so it uses the device token from pairing instead.
+
+A push to `main` publishes a signed APK to a GitHub Release. Install and update it with Obtainium. The one-time keystore and phone setup are in `apps/mobile/README.md`.
+
 ## Checks
 
 ```bash
@@ -80,12 +86,13 @@ Server tests run against Postgres with pgvector (`pnpm db:up`). Each test file g
 
 ## Layout
 
-| Path              | What it is                                            |
-| ----------------- | ----------------------------------------------------- |
-| `apps/server`     | Hono API, Drizzle migrations, pg-boss, storage        |
-| `apps/web`        | The React app (browser and, later, the phone WebView) |
-| `apps/ml`         | Python ML service skeleton                            |
-| `packages/shared` | Zod API contract used by the server and the web app   |
-| `infra`           | Docker Compose and the Mac launchd helpers            |
+| Path              | What it is                                             |
+| ----------------- | ------------------------------------------------------ |
+| `apps/server`     | Hono API, Drizzle migrations, pg-boss, storage         |
+| `apps/web`        | The React app, in a browser and inside the Android app |
+| `apps/mobile`     | Capacitor shell that bundles the web app and backup    |
+| `apps/ml`         | Python ML service skeleton                             |
+| `packages/shared` | Zod API contract used by the server and the web app    |
+| `infra`           | Docker Compose and the Mac launchd helpers             |
 
 Add an endpoint by defining it in `packages/shared` and implementing it in `apps/server/src/routes`. Until a handler is registered, the route returns 501. The contract is the source for OpenAPI.

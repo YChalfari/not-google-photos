@@ -1,8 +1,11 @@
-import { FolderHeart, Images, Search, Settings, Shield, Users } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { CloudUpload, FolderHeart, Images, Search, Settings, Shield, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
+import { unpairThisPhone } from '@/lib/device';
+import { isNativeApp, usesDeviceAuth } from '@/lib/native';
 import { cn } from '@/lib/utils';
 import { useSession } from '@/session-context';
 
@@ -16,9 +19,19 @@ const NAV = [
 export function Shell() {
   const { info, me, refresh } = useSession();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const admin = me?.user.role === 'admin';
+  const onPhone = isNativeApp();
+  const deviceAuth = usesDeviceAuth();
 
   async function logout() {
+    if (deviceAuth) {
+      await unpairThisPhone();
+      queryClient.setQueryData(['device', 'connection'], false);
+      await refresh();
+      void navigate('/connect');
+      return;
+    }
     await api('auth.logout');
     await refresh();
     void navigate('/login');
@@ -34,6 +47,7 @@ export function Shell() {
           ))}
         </nav>
         <div className="flex flex-col gap-1 border-t border-border pt-4">
+          {onPhone ? <SideLink to="/backup" label="Backup" icon={CloudUpload} end={false} /> : null}
           <SideLink to="/settings" label="Settings" icon={Settings} end={false} />
           {admin ? <SideLink to="/admin" label="Admin" icon={Shield} end={false} /> : null}
           <button
@@ -41,15 +55,22 @@ export function Shell() {
             className="mt-2 rounded-md px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent"
             onClick={() => void logout()}
           >
-            Sign out
+            {deviceAuth ? 'Unpair this phone' : 'Sign out'}
           </button>
         </div>
       </aside>
 
       <div className="flex min-h-screen flex-col">
-        <header className="flex items-center justify-between gap-3 px-4 py-4 md:hidden">
+        <header className="flex items-center justify-between gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4 md:hidden">
           <Brand name={info?.name} />
           <div className="flex items-center gap-1">
+            {onPhone ? (
+              <Button variant="ghost" size="icon" asChild>
+                <NavLink to="/backup" aria-label="Backup">
+                  <CloudUpload />
+                </NavLink>
+              </Button>
+            ) : null}
             {admin ? (
               <Button variant="ghost" size="icon" asChild>
                 <NavLink to="/admin" aria-label="Admin">
@@ -67,7 +88,7 @@ export function Shell() {
         <main className="flex-1 px-4 pt-2 pb-24 md:px-8 md:py-8">
           <Outlet />
         </main>
-        <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-border bg-card/95 px-2 py-2 backdrop-blur md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-border bg-card/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
           {NAV.map((item) => (
             <BottomLink key={item.to} {...item} />
           ))}

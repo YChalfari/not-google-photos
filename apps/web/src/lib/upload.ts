@@ -1,4 +1,5 @@
 import { ApiClientError } from '@/lib/api';
+import { nativeFetchParts } from '@/lib/native';
 
 async function sha1Hex(bytes: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-1', bytes);
@@ -19,7 +20,9 @@ export async function uploadAsset(file: File): Promise<UploadResult> {
   if (file.lastModified > 0) body.append('capturedAt', new Date(file.lastModified).toISOString());
   body.append('file', file, file.name);
 
-  const response = await fetch('/api/assets', { method: 'POST', body, credentials: 'include' });
+  const headers = new Headers();
+  const { url, credentials } = nativeFetchParts('/api/assets', headers);
+  const response = await fetch(url, { method: 'POST', body, credentials, headers });
   const json = (await response.json().catch(() => undefined)) as
     UploadResult | { error?: { code?: string; message?: string; details?: unknown } } | undefined;
   if (!response.ok) {

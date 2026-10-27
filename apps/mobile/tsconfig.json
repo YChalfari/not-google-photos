@@ -1,13 +1,8 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "lib": ["ES2022", "DOM"],
-    "types": ["vite/client"]
+    "lib": ["ES2023"],
+    "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["capacitor.config.ts"]
 }

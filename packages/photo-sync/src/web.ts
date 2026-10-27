@@ -7,6 +7,7 @@ import type {
   MediaFolder,
   PermissionStatus,
   PhotoSyncPlugin,
+  DeviceConnection,
   SyncConfiguration,
   SyncStatus,
 } from './definitions';
@@ -20,7 +21,12 @@ const ANDROID_ONLY = 'Backup runs in the Not Google Photos app on your phone.';
  */
 export class PhotoSyncWeb extends WebPlugin implements PhotoSyncPlugin {
   async checkPermissions(): Promise<PermissionStatus> {
-    return { media: 'denied', mediaLocation: 'denied', notifications: 'denied', batteryOptimizationExempt: true };
+    return {
+      media: 'denied',
+      mediaLocation: 'denied',
+      notifications: 'denied',
+      batteryOptimizationExempt: true,
+    };
   }
 
   async requestPermissions(): Promise<PermissionStatus> {
@@ -74,6 +80,10 @@ export class PhotoSyncWeb extends WebPlugin implements PhotoSyncPlugin {
     throw this.unavailable(ANDROID_ONLY);
   }
 
+  async getConnection(): Promise<DeviceConnection | null> {
+    return null;
+  }
+
   async listFolders(): Promise<{ folders: MediaFolder[] }> {
     throw this.unavailable(ANDROID_ONLY);
   }
@@ -94,7 +104,11 @@ export class PhotoSyncWeb extends WebPlugin implements PhotoSyncPlugin {
     throw this.unavailable(ANDROID_ONLY);
   }
 
-  async pair(): Promise<{ serverId: string | null; deviceId: string | null; userName: string | null }> {
+  async pair(): Promise<{
+    serverId: string | null;
+    deviceId: string | null;
+    userName: string | null;
+  }> {
     throw this.unavailable(ANDROID_ONLY);
   }
 }

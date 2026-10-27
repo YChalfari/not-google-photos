@@ -7,6 +7,10 @@ export interface SessionValue {
   me: MeResponse | null | undefined;
   meError: unknown;
   ready: boolean;
+  /** True when this WebView is the installed app and must use the device token. */
+  deviceAuth: boolean;
+  /** True when that token is stored and a server address is known. */
+  paired: boolean;
   refresh: () => Promise<void>;
 }
 

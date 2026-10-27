@@ -46,10 +46,16 @@ export interface PhotoSyncPlugin {
   scheduleMemoryNotifications(opts: { time: string; enabled?: boolean }): Promise<void>;
 
   /** Fires while a run is working (throttled to a few events per second). */
-  addListener(eventName: 'progress', listenerFunc: (status: SyncStatus) => void): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'progress',
+    listenerFunc: (status: SyncStatus) => void,
+  ): Promise<PluginListenerHandle>;
 
   /** Fires when the phase, counts, outcome, or waiting reason change. */
-  addListener(eventName: 'statusChanged', listenerFunc: (status: SyncStatus) => void): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'statusChanged',
+    listenerFunc: (status: SyncStatus) => void,
+  ): Promise<PluginListenerHandle>;
 
   removeAllListeners(): Promise<void>;
 
@@ -58,6 +64,16 @@ export interface PhotoSyncPlugin {
 
   /** The stored settings (without the device token) and the active triggers. */
   getSettings(): Promise<SyncConfiguration>;
+
+  /**
+   * The server the bundled UI should call, plus the device token for `Authorization`.
+   * Resolves to null when this phone is not paired. Home is preferred on Wi-Fi and the away
+   * address is preferred off it, using the same lookup as a backup run. A Bonjour find can
+   * update the stored home address when the computer's IP changed. When the phone is paired
+   * but nothing answers, the stored address is still returned so the UI can show that the
+   * server is unreachable. The token is kept out of `getSettings`.
+   */
+  getConnection(): Promise<DeviceConnection | null>;
 
   /** Folders that contain photos or videos, for the folder picker. */
   listFolders(): Promise<{ folders: MediaFolder[] }>;
@@ -160,6 +176,15 @@ export interface StoredSyncSettings {
   unreachableNudgeDays: number;
 }
 
+/** What the bundled UI needs to call the server. Not available in a browser. */
+export interface DeviceConnection {
+  /** Origin that answered, or the stored address when the phone is paired but nothing answered. */
+  baseUrl: string;
+  /** Device token. Held in memory by the API client; never written to `localStorage`. */
+  token: string;
+  serverId: string | null;
+}
+
 export interface SyncConfiguration {
   settings: StoredSyncSettings;
   triggers: SyncTrigger[];
@@ -182,7 +207,8 @@ export type SyncTrigger =
   /** Runs at each listed time of day, 24-hour "HH:mm". */
   | { kind: 'timesOfDay'; times: string[] };
 
-export type SyncPhase = 'idle' | 'checkingServer' | 'scanning' | 'hashing' | 'checking' | 'uploading';
+export type SyncPhase =
+  'idle' | 'checkingServer' | 'scanning' | 'hashing' | 'checking' | 'uploading';
 
 /** Why items are waiting instead of uploading. */
 export type WaitingReason =

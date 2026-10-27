@@ -8,6 +8,7 @@ import { AssetDialog } from '@/components/asset-dialog';
 import { EmptyState, ErrorState, LoadingBlock, Page } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { api, errorMessage } from '@/lib/api';
+import { assetUrl } from '@/lib/native';
 import { formatBytes, formatMonth } from '@/lib/format';
 import { uploadAsset } from '@/lib/upload';
 import { cn } from '@/lib/utils';
@@ -226,7 +227,7 @@ function Month({
       {photos.data ? (
         <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-6">
           {photos.data.assets.map((asset) => {
-            const src = asset.thumbnailUrl ?? placeholder(asset.thumbhash);
+            const src = assetUrl(asset.thumbnailUrl) ?? placeholder(asset.thumbhash);
             return (
               <button
                 key={asset.id}

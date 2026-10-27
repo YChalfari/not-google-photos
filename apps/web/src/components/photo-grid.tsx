@@ -1,6 +1,7 @@
 import { Heart, ImagePlus, Play } from 'lucide-react';
 import { thumbHashToDataURL } from 'thumbhash';
 import type { AssetSummary } from '@ngp/shared';
+import { assetUrl } from '@/lib/native';
 
 function placeholder(thumbhash: string | null): string | undefined {
   if (!thumbhash) return undefined;
@@ -22,7 +23,7 @@ export function PhotoGrid({
   return (
     <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-6">
       {assets.map((asset) => {
-        const src = asset.thumbnailUrl ?? placeholder(asset.thumbhash);
+        const src = assetUrl(asset.thumbnailUrl) ?? placeholder(asset.thumbhash);
         return (
           <button
             key={asset.id}

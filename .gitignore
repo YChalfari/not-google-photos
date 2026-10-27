@@ -15,6 +15,10 @@ __pycache__/
 *.pyc
 .venv/
 
+# Release signing keys. The CI copy lives in GitHub secrets, not in the repo.
+*.keystore
+*.jks
+
 # Editors and OS
 .DS_Store
 .idea/

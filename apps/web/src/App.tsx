@@ -1,9 +1,12 @@
 import { Route, Routes } from 'react-router-dom';
 import { PlaceholderPage, Shell } from '@/components/shell';
 import { AdminPage } from '@/pages/admin';
+import { BackupPage } from '@/pages/backup';
+import { ConnectPage } from '@/pages/connect';
 import { InvitePage } from '@/pages/invite';
 import { LibraryPage } from '@/pages/library';
 import { LoginPage } from '@/pages/login';
+import { MemoryPage } from '@/pages/memory';
 import { PeoplePage, PersonPage } from '@/pages/people';
 import { SearchPage } from '@/pages/search';
 import { SettingsPage } from '@/pages/settings';
@@ -14,6 +17,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/setup" element={<SetupPage />} />
+      <Route path="/connect" element={<ConnectPage />} />
       <Route path="/invite/:token" element={<InvitePage />} />
       <Route element={<GuestOnly />}>
         <Route path="/login" element={<LoginPage />} />
@@ -34,6 +38,8 @@ export function App() {
           />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/backup" element={<BackupPage />} />
+          <Route path="/memories/:id" element={<MemoryPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="/admin" element={<AdminPage />} />
           </Route>

@@ -172,6 +172,28 @@ class PhotoSyncPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun getConnection(call: PluginCall) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val connection = runtime.coordinator.connection()
+                if (connection == null) {
+                    // No `data` field: the web side resolves null and shows the connect screen.
+                    call.resolve()
+                    return@launch
+                }
+                call.resolve(
+                    JSObject()
+                        .put("baseUrl", connection.baseUrl)
+                        .put("token", connection.token)
+                        .put("serverId", connection.serverId ?: JSONObject.NULL),
+                )
+            } catch (e: Exception) {
+                call.reject(e.message ?: "Couldn't reach the server")
+            }
+        }
+    }
+
+    @PluginMethod
     fun listFolders(call: PluginCall) {
         scope.launch(Dispatchers.IO) {
             try {

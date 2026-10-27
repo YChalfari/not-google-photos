@@ -23,6 +23,8 @@ class BackupCoordinator(
 ) {
     data class Applied(val sync: Boolean, val fullScan: Boolean)
 
+    data class DeviceConnection(val baseUrl: String, val token: String, val serverId: String?)
+
     /** Merges [patch] (a `SyncSettings` object, plus `deviceToken`) and re-arms schedules. */
     suspend fun apply(patch: JSONObject): Applied {
         val hadToken = !store.deviceToken.isNullOrBlank()
@@ -93,6 +95,42 @@ class BackupCoordinator(
         found.movedHome?.let { patch.put("homeUrl", it) }
         apply(patch)
         return paired
+    }
+
+    /**
+     * The address and token the bundled UI should use. Null when this phone has no token or no
+     * server address. A paired phone whose server is down still gets its stored address.
+     */
+    suspend fun connection(): DeviceConnection? {
+        val token = store.deviceToken?.takeIf { it.isNotBlank() } ?: return null
+        val settings = store.settings
+        if (!settings.hasServer) return null
+        val network = conditions.network()
+        return when (val found = resolver.resolve(settings, token, network, AtomicInteger())) {
+            is ServerResolver.Result.Reachable -> {
+                if (found.movedHome != null || (found.serverId != null && settings.serverId == null)) {
+                    store.updateSettings { current ->
+                        current.copy(
+                            homeUrl = found.movedHome ?: current.homeUrl,
+                            serverId = current.serverId ?: found.serverId,
+                        )
+                    }
+                }
+                DeviceConnection(
+                    baseUrl = found.address.trimEnd('/'),
+                    token = token,
+                    serverId = found.serverId ?: store.settings.serverId,
+                )
+            }
+            is ServerResolver.Result.Unreachable -> {
+                val fallback = if (network.local) {
+                    settings.homeUrl ?: settings.remoteUrl
+                } else {
+                    settings.remoteUrl ?: settings.homeUrl
+                }
+                fallback?.let { DeviceConnection(it.trimEnd('/'), token, settings.serverId) }
+            }
+        }
     }
 
     fun setSchedule(triggers: List<SyncTrigger>) {
