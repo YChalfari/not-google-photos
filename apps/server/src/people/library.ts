@@ -78,6 +78,7 @@ export async function personSummaries(
       isHidden: row.isHidden,
       hideFromMemories: row.hideFromMemories,
       coverUrl,
+      coverAssetId: face?.assetId ?? null,
       coverBox: face ? coverBox(face) : null,
     };
   });

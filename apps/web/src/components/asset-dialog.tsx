@@ -30,11 +30,14 @@ function placeholder(thumbhash: string | null): string | undefined {
 export function AssetDialog({
   assetId,
   focusPersonId = null,
+  mainAssetId = null,
   onClose,
 }: {
   assetId: string | null;
   /** Face to select first, so a group photo opens on the person you came from. */
   focusPersonId?: string | null;
+  /** Photo currently used as that person's picture. */
+  mainAssetId?: string | null;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -45,6 +48,14 @@ export function AssetDialog({
     enabled: assetId !== null,
   });
   const selectedId = selection?.assetId === assetId ? selection.faceId : null;
+
+  const makeMain = useMutation({
+    mutationFn: () =>
+      api('people.update', { params: { id: focusPersonId! }, body: { coverAssetId: assetId! } }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['people'] });
+    },
+  });
 
   const update = useMutation({
     mutationFn: (body: { isFavorite?: boolean; isArchived?: boolean; isTrashed?: boolean }) =>
@@ -132,6 +143,19 @@ export function AssetDialog({
                     </span>
                   ))}
                 </p>
+              ) : null}
+              {focusPersonId && faces.some((face) => face.person?.id === focusPersonId) ? (
+                <Button
+                  variant={asset.id === mainAssetId ? 'default' : 'outline'}
+                  size="sm"
+                  disabled={asset.id === mainAssetId || makeMain.isPending}
+                  onClick={() => makeMain.mutate()}
+                >
+                  {asset.id === mainAssetId ? 'Main photo' : 'Use as main photo'}
+                </Button>
+              ) : null}
+              {makeMain.isError ? (
+                <p className="text-sm text-destructive">{errorMessage(makeMain.error)}</p>
               ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button

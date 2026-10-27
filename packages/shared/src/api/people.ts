@@ -11,6 +11,8 @@ export const PersonSummary = z
     isHidden: z.boolean(),
     hideFromMemories: z.boolean(),
     coverUrl: z.string().nullable(),
+    /** Photo the circle is cropped from. */
+    coverAssetId: Id.nullable(),
     /** Cover face on `coverUrl`, so a group photo can be cropped to one person. */
     coverBox: FaceBox.nullable(),
   })
@@ -55,13 +57,15 @@ export const peopleEndpoints = defineEndpoints({
     path: '/api/people/:id',
     auth: 'user',
     tag: 'people',
-    summary: 'Name, hide, or keep a person out of memories',
+    summary: 'Name, hide, or choose the photo used for this person',
     params: IdParams,
     body: z.object({
       name: PersonName.nullable().optional(),
       isHidden: z.boolean().optional(),
       hideFromMemories: z.boolean().optional(),
       coverFaceId: Id.optional(),
+      /** Use this photo as the person's picture. Their face in it becomes the circle. */
+      coverAssetId: Id.optional(),
     }),
     response: z.object({ person: PersonSummary }),
     errors: ['not_found'],

@@ -1,8 +1,10 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createUser, signIn } from './support/factories';
+import { faces, people } from '../src/db/schema';
+import { createUser, insertAsset, insertFace, insertPerson, signIn } from './support/factories';
 import { TestClient } from './support/client';
 import { createTestServer, type TestServer } from './support/server';
 
@@ -112,6 +114,55 @@ describe('health, identity, and the contract surface', () => {
     expect(await asset.text()).toContain('library');
 
     const missing = await client.fetch('/assets/missing.js');
+    expect(missing.status).toBe(404);
+  });
+});
+
+describe('merging people', () => {
+  it('keeps the main photo and can combine several people into a named one', async () => {
+    const user = await createUser(t.ctx, { email: 'merge@example.com' });
+    const client = await signIn(t.app, user.email);
+    const kept = await insertAsset(t.ctx, user.id, { filename: 'kept.jpg' });
+    const other = await insertAsset(t.ctx, user.id, { filename: 'other.jpg' });
+    const third = await insertAsset(t.ctx, user.id, { filename: 'third.jpg' });
+    const stranger = await insertAsset(t.ctx, user.id, { filename: 'stranger.jpg' });
+    const maya = await insertPerson(t.ctx, user.id, 'Maya');
+    const duplicate = await insertPerson(t.ctx, user.id, null);
+    const another = await insertPerson(t.ctx, user.id, null);
+    const mayaFace = await insertFace(t.ctx, { assetId: kept.id, ownerId: user.id, personId: maya.id });
+    const duplicateFace = await insertFace(t.ctx, { assetId: other.id, ownerId: user.id, personId: duplicate.id });
+    await insertFace(t.ctx, { assetId: third.id, ownerId: user.id, personId: another.id });
+    await t.ctx.db.update(faces).set({ quality: 0.2 }).where(eq(faces.id, mayaFace.id));
+    await t.ctx.db.update(faces).set({ quality: 0.99 }).where(eq(faces.id, duplicateFace.id));
+    await t.ctx.db.update(people).set({ coverFaceId: mayaFace.id }).where(eq(people.id, maya.id));
+    await t.ctx.db.update(people).set({ coverFaceId: duplicateFace.id }).where(eq(people.id, duplicate.id));
+
+    const merged = await client.call('people.merge', {
+      params: { id: maya.id },
+      body: { sourcePersonIds: [duplicate.id, another.id] },
+    });
+    expect(merged.status).toBe(200);
+    expect(merged.data.person).toMatchObject({
+      id: maya.id,
+      name: 'Maya',
+      faceCount: 3,
+      coverAssetId: kept.id,
+    });
+
+    const gone = await client.call('people.get', { params: { id: duplicate.id } });
+    expect(gone.status).toBe(404);
+
+    const changed = await client.call('people.update', {
+      params: { id: maya.id },
+      body: { coverAssetId: other.id },
+    });
+    expect(changed.status).toBe(200);
+    expect(changed.data.person.coverAssetId).toBe(other.id);
+
+    const missing = await client.call('people.update', {
+      params: { id: maya.id },
+      body: { coverAssetId: stranger.id },
+    });
     expect(missing.status).toBe(404);
   });
 });

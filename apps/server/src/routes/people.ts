@@ -46,12 +46,30 @@ export const peopleHandlers: Handlers = {
 
   'people.update': async ({ ctx, auth, params, body }) => {
     const person = await requirePerson(ctx, auth.user.id, params.id);
+    let nextCover: string | undefined;
     if (body.coverFaceId) {
       const [face] = await ctx.db
         .select({ id: faces.id })
         .from(faces)
         .where(and(eq(faces.id, body.coverFaceId), eq(faces.personId, person.id)));
       if (!face) throw new ApiError('not_found', 'That face is not one of theirs');
+      nextCover = face.id;
+    } else if (body.coverAssetId) {
+      const [face] = await ctx.db
+        .select({ id: faces.id })
+        .from(faces)
+        .where(
+          and(
+            eq(faces.assetId, body.coverAssetId),
+            eq(faces.personId, person.id),
+            eq(faces.ownerId, auth.user.id),
+            eq(faces.ignored, false),
+          ),
+        )
+        .orderBy(sql`${faces.quality} desc nulls last`)
+        .limit(1);
+      if (!face) throw new ApiError('not_found', 'That photo does not show this person');
+      nextCover = face.id;
     }
     const [updated] = await ctx.db
       .update(people)
@@ -59,7 +77,7 @@ export const peopleHandlers: Handlers = {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
         ...(body.hideFromMemories !== undefined ? { hideFromMemories: body.hideFromMemories } : {}),
-        ...(body.coverFaceId !== undefined ? { coverFaceId: body.coverFaceId } : {}),
+        ...(nextCover !== undefined ? { coverFaceId: nextCover } : {}),
       })
       .where(eq(people.id, person.id))
       .returning();
@@ -76,6 +94,9 @@ export const peopleHandlers: Handlers = {
     const sources: PersonRow[] = [];
     for (const sourceId of sourceIds) sources.push(await requirePerson(ctx, auth.user.id, sourceId));
 
+    const keptCover = target.coverFaceId;
+    let name = target.name;
+    let coverFaceId = target.coverFaceId;
     await ctx.db.transaction(async (tx) => {
       for (const source of sources) {
         const rules = await tx.select().from(albumRules).where(eq(albumRules.personId, source.id));
@@ -91,15 +112,15 @@ export const peopleHandlers: Handlers = {
           .update(faces)
           .set({ personId: target.id, assignedManually: true })
           .where(and(eq(faces.personId, source.id), eq(faces.ownerId, auth.user.id)));
-        if (!target.coverFaceId && source.coverFaceId) target.coverFaceId = source.coverFaceId;
-        if (!target.name && source.name) target.name = source.name;
+        if (!name && source.name) name = source.name;
+        if (!coverFaceId && source.coverFaceId) coverFaceId = source.coverFaceId;
         await tx.delete(people).where(eq(people.id, source.id));
       }
-      await tx
-        .update(people)
-        .set({ name: target.name, coverFaceId: target.coverFaceId })
-        .where(eq(people.id, target.id));
+      await tx.update(people).set({ name, coverFaceId }).where(eq(people.id, target.id));
       await refreshPeople(tx, [target.id]);
+      if (keptCover) {
+        await tx.update(people).set({ coverFaceId: keptCover }).where(eq(people.id, target.id));
+      }
     });
 
     const person = await requirePerson(ctx, auth.user.id, target.id);

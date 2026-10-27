@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AssetDialog } from '@/components/asset-dialog';
 import { FaceAvatar } from '@/components/face-avatar';
 import { PhotoGrid } from '@/components/photo-grid';
@@ -59,6 +59,7 @@ export function PeoplePage() {
 
 export function PersonPage() {
   const { id = '' } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [openId, setOpenId] = useState<string | null>(null);
   const person = useQuery({
@@ -76,8 +77,12 @@ export function PersonPage() {
     queryFn: () => api('people.list'),
   });
   const [name, setName] = useState<string | null>(null);
-  const [mergeId, setMergeId] = useState('');
+  const [mergeSelection, setMergeSelection] = useState<{ personId: string; ids: string[] }>({
+    personId: id,
+    ids: [],
+  });
   const draft = name ?? person.data?.person.name ?? '';
+  const mergeIds = mergeSelection.personId === id ? mergeSelection.ids : [];
 
   const save = useMutation({
     mutationFn: () =>
@@ -97,14 +102,37 @@ export function PersonPage() {
     },
   });
   const merge = useMutation({
-    mutationFn: () => api('people.merge', { params: { id }, body: { sourcePersonIds: [mergeId] } }),
+    mutationFn: (plan: { targetId: string; sourceIds: string[] }) =>
+      api('people.merge', { params: { id: plan.targetId }, body: { sourcePersonIds: plan.sourceIds } }),
+    onSuccess: async (_person, plan) => {
+      setMergeSelection({ personId: id, ids: [] });
+      await queryClient.invalidateQueries({ queryKey: ['people'] });
+      if (plan.targetId !== id) void navigate(`/people/${plan.targetId}`);
+    },
+  });
+  const chooseMain = useMutation({
+    mutationFn: (assetId: string) =>
+      api('people.update', { params: { id }, body: { coverAssetId: assetId } }),
     onSuccess: async () => {
-      setMergeId('');
       await queryClient.invalidateQueries({ queryKey: ['people'] });
     },
   });
 
   const mergeChoices = (others.data?.people ?? []).filter((item) => item.id !== id);
+  const selectedPeople = mergeChoices.filter((item) => mergeIds.includes(item.id));
+  const mergePlan = person.data ? mergeDestination(person.data.person, selectedPeople) : null;
+
+  function toggleMerge(personId: string) {
+    setMergeSelection((current) => {
+      const ids = current.personId === id ? current.ids : [];
+      const next = ids.includes(personId)
+        ? ids.filter((item) => item !== personId)
+        : ids.length >= 49
+          ? ids
+          : [...ids, personId];
+      return { personId: id, ids: next };
+    });
+  }
 
   return (
     <Page
@@ -164,52 +192,66 @@ export function PersonPage() {
         </div>
       ) : null}
       {mergeChoices.length > 0 ? (
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (mergeId) merge.mutate();
-          }}
-        >
-          <div>
-            <p className="text-sm font-medium">Merge with someone</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Pick the face that is this same person. Every photo in that group moves here.
-            </p>
-          </div>
-          <div
-            className="grid max-h-64 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6 md:grid-cols-8"
-            role="group"
-            aria-label="Merge with someone"
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (mergePlan && mergePlan.sourceIds.length > 0) {
+                merge.mutate({ targetId: mergePlan.target.id, sourceIds: mergePlan.sourceIds });
+              }
+            }}
           >
-            {mergeChoices.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                aria-pressed={mergeId === item.id}
-                title={`${item.name ?? 'Unnamed'}, ${item.faceCount} faces`}
-                className="flex min-w-0 flex-col items-center gap-1 rounded-md p-1 hover:bg-accent"
-                onClick={() => setMergeId(item.id)}
+            <div>
+              <p className="text-sm font-medium">Merge with someone</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Select every matching face, including several at once. They join this person. If one of them already
+                has a name, everyone joins that person, and that person's photo stays.
+              </p>
+            </div>
+            <div
+              className="grid max-h-64 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6 md:grid-cols-8"
+              role="group"
+              aria-label="Merge with someone"
+            >
+              {mergeChoices.map((item) => {
+                const picked = mergeIds.includes(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-pressed={picked}
+                    title={`${item.name ?? 'Unnamed'}, ${item.faceCount} faces`}
+                    className="flex min-w-0 flex-col items-center gap-1 rounded-md p-1 hover:bg-accent"
+                    onClick={() => toggleMerge(item.id)}
+                  >
+                    <span
+                      className={cn(
+                        'aspect-square w-full overflow-hidden rounded-full bg-secondary',
+                        picked ? 'ring-2 ring-primary' : 'ring-1 ring-border',
+                      )}
+                    >
+                      <FaceAvatar src={item.coverUrl} box={item.coverBox} alt="" />
+                    </span>
+                    <span className="w-full truncate text-center text-xs">{item.name ?? 'Unnamed'}</span>
+                    <span className="text-xs text-muted-foreground">{item.faceCount}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div>
+              <Button
+                type="submit"
+                variant="outline"
+                disabled={!mergePlan || mergePlan.sourceIds.length === 0 || merge.isPending}
               >
-                <span
-                  className={cn(
-                    'aspect-square w-full overflow-hidden rounded-full bg-secondary',
-                    mergeId === item.id ? 'ring-2 ring-primary' : 'ring-1 ring-border',
-                  )}
-                >
-                  <FaceAvatar src={item.coverUrl} box={item.coverBox} alt="" />
-                </span>
-                <span className="w-full truncate text-center text-xs">{item.name ?? 'Unnamed'}</span>
-                <span className="text-xs text-muted-foreground">{item.faceCount}</span>
-              </button>
-            ))}
-          </div>
-          <div>
-            <Button type="submit" variant="outline" disabled={!mergeId || merge.isPending}>
-              Merge
-            </Button>
-          </div>
-        </form>
+                {mergePlan && mergePlan.sourceIds.length > 0
+                  ? mergePlan.target.id === id
+                    ? `Merge ${mergePlan.sourceIds.length} here`
+                    : `Merge into ${mergePlan.target.name}`
+                  : 'Merge'}
+              </Button>
+            </div>
+          </form>
       ) : null}
       {save.isError ? <ErrorState title="Couldn't save that name" error={save.error} /> : null}
       {merge.isError ? <ErrorState title="Couldn't merge those people" error={merge.error} /> : null}
@@ -221,9 +263,41 @@ export function PersonPage() {
         <EmptyState title="No photos" body="Faces grouped with this person will show up here." />
       ) : null}
       {photos.data && photos.data.items.length > 0 ? (
-        <PhotoGrid assets={photos.data.items} onOpen={setOpenId} />
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="text-sm font-medium">Main photo</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Pick the photo used for this person. Merging does not replace it.
+            </p>
+          </div>
+          {chooseMain.isError ? <ErrorState title="Couldn't change the main photo" error={chooseMain.error} /> : null}
+          <PhotoGrid
+            assets={photos.data.items}
+            mainAssetId={person.data?.person.coverAssetId}
+            onMakeMain={(assetId) => chooseMain.mutate(assetId)}
+            onOpen={setOpenId}
+          />
+        </div>
       ) : null}
-      <AssetDialog assetId={openId} focusPersonId={id} onClose={() => setOpenId(null)} />
+      <AssetDialog
+        assetId={openId}
+        focusPersonId={id}
+        mainAssetId={person.data?.person.coverAssetId}
+        onClose={() => setOpenId(null)}
+      />
     </Page>
   );
+}
+
+function mergeDestination(
+  current: { id: string; name: string | null; faceCount: number },
+  selected: readonly { id: string; name: string | null; faceCount: number }[],
+): { target: { id: string; name: string | null }; sourceIds: string[] } {
+  const named = selected.filter((person) => person.name);
+  const target =
+    current.name || named.length === 0
+      ? current
+      : [...named].sort((left, right) => right.faceCount - left.faceCount || left.id.localeCompare(right.id))[0]!;
+  const sourceIds = [current.id, ...selected.map((person) => person.id)].filter((personId) => personId !== target.id);
+  return { target, sourceIds };
 }
