@@ -8,6 +8,7 @@ import { AssetDialog } from '@/components/asset-dialog';
 import { EmptyState, ErrorState, LoadingBlock, Page } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { api, errorMessage } from '@/lib/api';
+import { useAssetParam } from '@/lib/asset-route';
 import { assetUrl } from '@/lib/native';
 import { formatBytes, formatMonth } from '@/lib/format';
 import { uploadAsset } from '@/lib/upload';
@@ -39,7 +40,7 @@ export function LibraryPage() {
   const scope: TimelineScope = SCOPES.some((item) => item.id === requested)
     ? (requested as TimelineScope)
     : 'library';
-  const [openId, setOpenId] = useState<string | null>(null);
+  const viewer = useAssetParam();
   const [uploadLabel, setUploadLabel] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -50,6 +51,7 @@ export function LibraryPage() {
     queryKey: ['timeline', 'buckets', scope],
     queryFn: () => api('timeline.buckets', { query: { scope, withShared: 'true' } }),
   });
+  const swipeIds = useLibrarySwipeIds(scope, buckets.data?.buckets, viewer.assetId);
 
   useEffect(() => {
     if (!refreshing) return;
@@ -169,10 +171,15 @@ export function LibraryPage() {
           monthKey={bucket.key}
           count={bucket.count}
           scope={scope}
-          onOpen={setOpenId}
+          onOpen={viewer.open}
         />
       ))}
-      <AssetDialog assetId={openId} onClose={() => setOpenId(null)} />
+      <AssetDialog
+        assetId={viewer.assetId}
+        ids={swipeIds}
+        onClose={viewer.close}
+        onNeighbor={viewer.select}
+      />
     </Page>
   );
 }
@@ -260,4 +267,50 @@ function Month({
       ) : null}
     </section>
   );
+}
+
+function useLibrarySwipeIds(
+  scope: TimelineScope,
+  buckets: readonly { key: string }[] | undefined,
+  assetId: string | null,
+): string[] {
+  const queryClient = useQueryClient();
+  const keys = buckets?.map((bucket) => bucket.key) ?? [];
+  const loaded = keys.map(
+    (key) =>
+      queryClient.getQueryData<{ assets: { id: string }[] }>([
+        'timeline',
+        'month',
+        scope,
+        key,
+      ]) ?? null,
+  );
+  const bucketIndex = assetId
+    ? loaded.findIndex((month) => month?.assets.some((asset) => asset.id === assetId))
+    : -1;
+  const neighborKey = (offset: number) =>
+    bucketIndex >= 0 ? keys[bucketIndex + offset] : undefined;
+  const previousKey = neighborKey(-1);
+  const nextKey = neighborKey(1);
+
+  useQuery({
+    queryKey: ['timeline', 'month', scope, previousKey ?? ''],
+    queryFn: () =>
+      api('timeline.bucket', {
+        params: { key: previousKey! },
+        query: { scope, withShared: 'true' },
+      }),
+    enabled: Boolean(assetId && previousKey && !loaded[bucketIndex - 1]),
+  });
+  useQuery({
+    queryKey: ['timeline', 'month', scope, nextKey ?? ''],
+    queryFn: () =>
+      api('timeline.bucket', {
+        params: { key: nextKey! },
+        query: { scope, withShared: 'true' },
+      }),
+    enabled: Boolean(assetId && nextKey && !loaded[bucketIndex + 1]),
+  });
+
+  return loaded.flatMap((month) => month?.assets.map((asset) => asset.id) ?? []);
 }

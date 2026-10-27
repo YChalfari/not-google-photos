@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Heart, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Heart, MoreVertical, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { thumbHashToDataURL } from 'thumbhash';
 import { FaceAvatar } from '@/components/face-avatar';
@@ -30,22 +30,37 @@ function placeholder(thumbhash: string | null): string | undefined {
 
 export function AssetDialog({
   assetId,
+  ids,
   focusPersonId = null,
   onClose,
+  onNeighbor,
 }: {
   assetId: string | null;
+  /** Photos in the current grid, newest first, so a swipe stays in that order. */
+  ids: readonly string[];
   /** Face to select first, so a group photo opens on the person you came from. */
   focusPersonId?: string | null;
   onClose: () => void;
+  onNeighbor: (id: string) => void;
 }) {
   const queryClient = useQueryClient();
   const [selection, setSelection] = useState<{ assetId: string; faceId: string } | null>(null);
+  const [menuAssetId, setMenuAssetId] = useState<string | null>(null);
+  const [menuFor, setMenuFor] = useState(assetId);
+  if (menuFor !== assetId) {
+    setMenuFor(assetId);
+    setMenuAssetId(null);
+  }
   const detail = useQuery({
     queryKey: ['asset', assetId],
     queryFn: () => api('assets.get', { params: { id: assetId! } }),
     enabled: assetId !== null,
   });
   const selectedId = selection?.assetId === assetId ? selection.faceId : null;
+  const index = assetId ? ids.indexOf(assetId) : -1;
+  const previousId = index > 0 ? (ids[index - 1] ?? null) : null;
+  const nextId = index >= 0 && index < ids.length - 1 ? (ids[index + 1] ?? null) : null;
+  const menuOpen = assetId !== null && menuAssetId === assetId;
 
   const update = useMutation({
     mutationFn: (body: { isFavorite?: boolean; isArchived?: boolean; isTrashed?: boolean }) =>
@@ -56,77 +71,159 @@ export function AssetDialog({
     },
   });
 
+  function showNeighbor(id: string | null) {
+    if (id) onNeighbor(id);
+  }
+
+  useEffect(() => {
+    if (!assetId) return;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('input, textarea, select')) return;
+      const id = event.key === 'ArrowLeft' ? previousId : event.key === 'ArrowRight' ? nextId : null;
+      if (!id) return;
+      event.preventDefault();
+      onNeighbor(id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [assetId, nextId, onNeighbor, previousId]);
+
+  const swipe = useHorizontalSwipe((direction) => {
+    showNeighbor(direction < 0 ? previousId : nextId);
+  });
+
   const asset = detail.data;
   const image =
     assetUrl(asset?.previewUrl ?? asset?.originalUrl) ?? placeholder(asset?.thumbhash ?? null);
   const faces = asset?.faces ?? [];
   const preferred = faces.find((face) => face.person?.id === focusPersonId) ?? faces[0] ?? null;
   const selected = faces.find((face) => face.id === selectedId) ?? preferred;
+  const heading = asset ? viewerHeading(asset.capturedAt, asset.location?.city ?? null) : null;
 
   return (
     <Dialog open={assetId !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[min(100%-2rem,56rem)] w-[min(100%-2rem,76rem)] overflow-y-auto p-0">
+      <DialogContent fullscreen>
         <DialogTitle className="sr-only">{asset?.originalFilename ?? 'Photo'}</DialogTitle>
         <DialogDescription className="sr-only">
-          {asset?.localDate ?? 'Photo details'}
+          {heading ? `${heading.date}${heading.sub ? `, ${heading.sub}` : ''}` : 'Photo details'}
         </DialogDescription>
-        {detail.isPending ? <div className="h-80 animate-pulse bg-secondary" /> : null}
-        {detail.isError ? (
-          <p className="p-6 text-sm text-muted-foreground">This photo could not be opened.</p>
+        <div
+          className="absolute inset-0 flex touch-pan-y items-center justify-center select-none"
+          style={{ transform: swipe.dragX === 0 ? undefined : `translateX(${swipe.dragX}px)` }}
+          {...swipe.handlers}
+        >
+          {detail.isPending ? <div className="h-full w-full animate-pulse bg-white/5" /> : null}
+          {detail.isError ? (
+            <p className="px-6 text-center text-sm text-white/80">This photo could not be opened.</p>
+          ) : null}
+          {asset?.type === 'video' ? (
+            <video
+              key={asset.id}
+              src={assetUrl(asset.playbackUrl ?? asset.originalUrl)}
+              poster={image}
+              controls
+              className="max-h-full max-w-full"
+            />
+          ) : null}
+          {asset && asset.type !== 'video' ? (
+            <FacePhoto
+              image={image}
+              faces={faces}
+              framedId={menuOpen ? selectedId : null}
+              onSelect={(faceId) => {
+                if (!assetId) return;
+                setSelection({ assetId, faceId });
+                setMenuAssetId(assetId);
+              }}
+            />
+          ) : null}
+        </div>
+        {previousId ? (
+          <button
+            type="button"
+            aria-label="Previous"
+            className="absolute top-1/2 left-2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/35 text-white"
+            onClick={() => showNeighbor(previousId)}
+          >
+            <ChevronLeft />
+          </button>
         ) : null}
-        {asset ? (
-          <div className="flex flex-col md:flex-row">
-            <div className="flex min-h-64 min-w-0 flex-1 items-center justify-center bg-[#1c1915]">
-              {asset.type === 'video' ? (
-                <video
-                  src={assetUrl(asset.playbackUrl ?? asset.originalUrl)}
-                  poster={image}
-                  controls
-                  className="max-h-[70vh] w-full"
-                />
-              ) : (
-                <FacePhoto
-                  image={image}
-                  faces={faces}
-                  selectedId={selected?.id ?? null}
-                  onSelect={(faceId) => {
-                    if (assetId) setSelection({ assetId, faceId });
-                  }}
-                />
-              )}
-            </div>
-            <div className="flex w-full flex-col gap-4 p-5 md:max-h-[80vh] md:w-80 md:overflow-y-auto">
-              <div>
-                <p className="font-medium break-words">{asset.originalFilename}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {formatWhen(asset.capturedAt)}
-                  {asset.location?.city ? ` · ${asset.location.city}` : ''}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {formatBytes(asset.sizeBytes)}
-                  {asset.camera?.model ? ` · ${asset.camera.model}` : ''}
-                </p>
-              </div>
+        {nextId ? (
+          <button
+            type="button"
+            aria-label="Next"
+            className="absolute top-1/2 right-2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/35 text-white"
+            onClick={() => showNeighbor(nextId)}
+          >
+            <ChevronRight />
+          </button>
+        ) : null}
+        <header className="absolute inset-x-0 top-0 z-50 flex items-center gap-1 bg-gradient-to-b from-black/75 to-transparent px-1 pt-[max(0.25rem,env(safe-area-inset-top))] pb-10">
+          <button
+            type="button"
+            aria-label="Back"
+            className="grid size-11 shrink-0 place-items-center rounded-full text-white hover:bg-white/15"
+            onClick={onClose}
+          >
+            <ArrowLeft />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{heading?.date ?? 'Photo'}</p>
+            {heading?.sub ? <p className="truncate text-xs text-white/80">{heading.sub}</p> : null}
+          </div>
+          <button
+            type="button"
+            aria-label="Details"
+            aria-expanded={menuOpen}
+            className="grid size-11 shrink-0 place-items-center rounded-full text-white hover:bg-white/15"
+            onClick={() => setMenuAssetId(menuOpen ? null : assetId)}
+          >
+            <MoreVertical />
+          </button>
+        </header>
+        {menuOpen && asset ? (
+          <>
+            <button
+              type="button"
+              aria-label="Close details"
+              className="absolute inset-0 z-30"
+              onClick={() => setMenuAssetId(null)}
+            />
+            <div className="absolute top-[calc(3.25rem+env(safe-area-inset-top))] right-2 z-40 max-h-[min(32rem,calc(100dvh-5rem-env(safe-area-inset-top)))] w-[min(24rem,calc(100%-1rem))] overflow-y-auto rounded-xl bg-card p-4 text-card-foreground shadow-lg">
+              <p className="font-medium break-words">{asset.originalFilename}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {formatWhen(asset.capturedAt)}
+                {asset.location
+                  ? ` · ${[asset.location.city, asset.location.country].filter(Boolean).join(', ')}`
+                  : ''}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {formatBytes(asset.sizeBytes)}
+                {asset.width && asset.height ? ` · ${asset.width} × ${asset.height}` : ''}
+                {asset.camera?.model ? ` · ${asset.camera.model}` : ''}
+                {asset.camera?.lens ? ` · ${asset.camera.lens}` : ''}
+              </p>
               {selected ? (
-                <FaceEditor
-                  assetId={asset.id}
-                  cropSrc={asset.previewUrl ?? asset.thumbnailUrl}
-                  faces={faces}
-                  selected={selected}
-                  onSelect={(faceId) => {
-                    if (assetId) setSelection({ assetId, faceId });
-                  }}
-                  onClose={onClose}
-                />
+                <div className="mt-4">
+                  <FaceEditor
+                    assetId={asset.id}
+                    cropSrc={asset.previewUrl ?? asset.thumbnailUrl}
+                    faces={faces}
+                    selected={selected}
+                    onSelect={(faceId) => {
+                      if (assetId) setSelection({ assetId, faceId });
+                    }}
+                  />
+                </div>
               ) : null}
               {asset.tags.length > 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {asset.tags.map((tag, index) => (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  {asset.tags.map((tag, tagIndex) => (
                     <span key={tag.name}>
-                      {index > 0 ? ', ' : ''}
+                      {tagIndex > 0 ? ', ' : ''}
                       <Link
                         to={`/search?q=${encodeURIComponent(tag.name)}`}
-                        onClick={onClose}
                         className="text-primary underline-offset-4 hover:underline"
                       >
                         {tag.name}
@@ -135,7 +232,7 @@ export function AssetDialog({
                   ))}
                 </p>
               ) : null}
-              <div className="flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <Button
                   variant={asset.isFavorite ? 'default' : 'outline'}
                   size="sm"
@@ -170,46 +267,121 @@ export function AssetDialog({
               </div>
               {asset.originalUrl ? (
                 <a
-                  className="text-sm text-primary underline-offset-4 hover:underline"
+                  className="mt-3 inline-block text-sm text-primary underline-offset-4 hover:underline"
                   href={assetUrl(asset.originalUrl)}
                 >
                   Download original
                 </a>
               ) : null}
             </div>
-          </div>
+          </>
         ) : null}
       </DialogContent>
     </Dialog>
   );
 }
 
+function viewerHeading(
+  capturedAt: string | null,
+  city: string | null,
+): { date: string; sub: string } {
+  if (!capturedAt) return { date: 'Undated', sub: city ?? '' };
+  const when = new Date(capturedAt);
+  const date = new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' as const }),
+  }).format(when);
+  const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(
+    when,
+  );
+  return { date, sub: [time, city].filter(Boolean).join(' · ') };
+}
+
+function useHorizontalSwipe(onSwipe: (direction: -1 | 1) => void) {
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const swiped = useRef(false);
+  const [dragX, setDragX] = useState(0);
+
+  function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    const target = event.target;
+    if (target instanceof HTMLVideoElement) {
+      const rect = target.getBoundingClientRect();
+      if (event.clientY > rect.bottom - 48) return;
+    }
+    start.current = { x: event.clientX, y: event.clientY };
+    swiped.current = false;
+  }
+
+  function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!start.current) return;
+    const dx = event.clientX - start.current.x;
+    const dy = event.clientY - start.current.y;
+    if (Math.abs(dx) <= Math.abs(dy)) return;
+    setDragX(dx);
+  }
+
+  function finish(event: React.PointerEvent<HTMLDivElement>) {
+    if (!start.current) return;
+    const dx = event.clientX - start.current.x;
+    const dy = event.clientY - start.current.y;
+    start.current = null;
+    setDragX(0);
+    if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy)) return;
+    swiped.current = true;
+    onSwipe(dx < 0 ? 1 : -1);
+  }
+
+  function onClickCapture(event: React.MouseEvent<HTMLDivElement>) {
+    if (!swiped.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    swiped.current = false;
+  }
+
+  return {
+    dragX,
+    handlers: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: finish,
+      onPointerCancel: () => {
+        start.current = null;
+        setDragX(0);
+      },
+      onClickCapture,
+    },
+  };
+}
+
 function FacePhoto({
   image,
   faces,
-  selectedId,
+  framedId,
   onSelect,
 }: {
   image: string | undefined;
   faces: readonly ShownFace[];
-  selectedId: string | null;
+  /** Set only after a tap, while tagging is open. Viewing a photo draws no boxes. */
+  framedId: string | null;
   onSelect: (faceId: string) => void;
 }) {
-  const selected = faces.find((face) => face.id === selectedId) ?? null;
+  const framed = faces.find((face) => face.id === framedId) ?? null;
   return (
     <div className="relative w-fit max-w-full">
-      <img src={image} alt="" className="block max-h-[70vh] max-w-full" />
+      <img src={image} alt="" draggable={false} className="block max-h-dvh max-w-full" />
       {faces.map((face) => (
         <button
           key={face.id}
           type="button"
           aria-label={faceLabel(face)}
-          aria-pressed={face.id === selectedId}
+          aria-pressed={face.id === framedId}
           className={cn(
-            'absolute rounded-sm border-2 shadow-[0_0_0_1px_rgba(0,0,0,0.65)]',
-            face.id === selectedId
-              ? 'border-white bg-white/15'
-              : 'border-white/75 hover:bg-white/10',
+            'absolute rounded-sm',
+            face.id === framedId
+              ? 'border-2 border-white bg-white/15 shadow-[0_0_0_1px_rgba(0,0,0,0.65)]'
+              : 'border-0 bg-transparent',
           )}
           style={{
             left: `${face.box.x * 100}%`,
@@ -220,15 +392,15 @@ function FacePhoto({
           onClick={() => onSelect(face.id)}
         />
       ))}
-      {selected ? (
+      {framed ? (
         <span
           className="pointer-events-none absolute rounded bg-[#1c1915]/80 px-1.5 py-0.5 text-xs text-white"
           style={{
-            left: `${selected.box.x * 100}%`,
-            top: `calc(${(selected.box.y + selected.box.height) * 100}% + 4px)`,
+            left: `${framed.box.x * 100}%`,
+            top: `calc(${(framed.box.y + framed.box.height) * 100}% + 4px)`,
           }}
         >
-          {selected.person?.name ?? 'Unnamed'}
+          {framed.person?.name ?? 'Unnamed'}
         </span>
       ) : null}
     </div>
@@ -241,14 +413,12 @@ function FaceEditor({
   faces,
   selected,
   onSelect,
-  onClose,
 }: {
   assetId: string;
   cropSrc: string | null;
   faces: readonly ShownFace[];
   selected: ShownFace;
   onSelect: (faceId: string) => void;
-  onClose: () => void;
 }) {
   const queryClient = useQueryClient();
   const people = useQuery({
@@ -382,7 +552,6 @@ function FaceEditor({
       {personId ? (
         <Link
           to={`/people/${personId}`}
-          onClick={onClose}
           className="text-sm text-primary underline-offset-4 hover:underline"
         >
           Open this person

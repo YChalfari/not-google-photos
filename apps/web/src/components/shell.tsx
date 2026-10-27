@@ -101,6 +101,7 @@ export function Shell() {
 function Brand({ name }: { name: string | undefined }) {
   return (
     <div className="flex items-center gap-3 px-1">
+      {/* TODO: Replace this mark with a real logo, and add a dark theme that follows the phone setting. */}
       <span className="grid size-9 place-items-center rounded-lg bg-primary font-serif text-sm text-primary-foreground">
         ng
       </span>

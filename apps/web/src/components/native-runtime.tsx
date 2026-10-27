@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { parsePairingUri } from '@ngp/shared';
 import { errorMessage } from '@/lib/api';
+import { historyIndex } from '@/lib/history';
 import { finishLaunch, isNativeApp } from '@/lib/native';
 import { pairPhone } from '@/lib/pairing';
 
@@ -58,8 +59,10 @@ export function NativeRuntime() {
 
     void (async () => {
       try {
-        const back = await App.addListener('backButton', ({ canGoBack }) => {
-          if (canGoBack) window.history.back();
+        const back = await App.addListener('backButton', () => {
+          // WebView.canGoBack() is false for React Router's pushState entries, so a photo
+          // or a previous screen would otherwise minimize the app.
+          if (historyIndex() > 0) window.history.back();
           else void App.minimizeApp();
         });
         const opened = await App.addListener('appUrlOpen', (event) => {

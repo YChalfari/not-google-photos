@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, LoadingBlock, Page } from '@/components/states'
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { useAssetParam } from '@/lib/asset-route';
 import { cn } from '@/lib/utils';
 
 export function PeoplePage() {
@@ -61,7 +62,7 @@ export function PersonPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [openId, setOpenId] = useState<string | null>(null);
+  const viewer = useAssetParam();
   const [photoChoice, setPhotoChoice] = useState<{ personId: string; choosing: boolean }>({
     personId: id,
     choosing: false,
@@ -294,12 +295,18 @@ export function PersonPage() {
             assets={photos.data.items}
             onOpen={(assetId) => {
               if (choosingPhoto) chooseMain.mutate(assetId);
-              else setOpenId(assetId);
+              else viewer.open(assetId);
             }}
           />
         </div>
       ) : null}
-      <AssetDialog assetId={openId} focusPersonId={id} onClose={() => setOpenId(null)} />
+      <AssetDialog
+        assetId={viewer.assetId}
+        ids={photos.data?.items.map((item) => item.id) ?? []}
+        focusPersonId={id}
+        onClose={viewer.close}
+        onNeighbor={viewer.select}
+      />
     </Page>
   );
 }

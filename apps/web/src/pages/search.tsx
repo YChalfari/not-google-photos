@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, LoadingBlock, Page } from '@/components/states'
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { useAssetParam } from '@/lib/asset-route';
 
 export function SearchPage() {
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ export function SearchPage() {
   const type = params.get('type') ?? '';
   const cursor = params.get('cursor') ?? '';
   const [draft, setDraft] = useState(q);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const viewer = useAssetParam();
   const searching = q.length > 0 || tag.length > 0 || city.length > 0 || type.length > 0;
 
   const suggestions = useQuery({
@@ -133,7 +134,7 @@ export function SearchPage() {
             <EmptyState title="Nothing matched" body="Try a person, cake, cats, dogs, birthday, or party." />
           ) : null}
           {results.data && results.data.items.length > 0 ? (
-            <PhotoGrid assets={results.data.items} onOpen={setOpenId} />
+            <PhotoGrid assets={results.data.items} onOpen={viewer.open} />
           ) : null}
           {results.data?.nextCursor ? (
             <Button variant="outline" onClick={() => setParams((current) => {
@@ -209,7 +210,12 @@ export function SearchPage() {
           </section>
         </div>
       ) : null}
-      <AssetDialog assetId={openId} onClose={() => setOpenId(null)} />
+      <AssetDialog
+        assetId={viewer.assetId}
+        ids={results.data?.items.map((item) => item.id) ?? []}
+        onClose={viewer.close}
+        onNeighbor={viewer.select}
+      />
     </Page>
   );
 }

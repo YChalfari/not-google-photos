@@ -12,14 +12,19 @@ export function DialogTrigger(props: React.ComponentProps<typeof DialogPrimitive
 export function DialogContent({
   className,
   children,
+  fullscreen = false,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & { fullscreen?: boolean }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[#1c1915]/40" />
+      <DialogPrimitive.Overlay
+        className={cn('fixed inset-0 z-50', fullscreen ? 'bg-black' : 'bg-[#1c1915]/40')}
+      />
       <DialogPrimitive.Content
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card p-6 shadow-lg',
+          fullscreen
+            ? 'fixed inset-0 z-50 h-dvh w-full overflow-hidden rounded-none border-0 bg-black p-0 text-white'
+            : 'fixed top-1/2 left-1/2 z-50 w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card p-6 shadow-lg',
           className,
         )}
         {...props}
