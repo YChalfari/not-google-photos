@@ -46,14 +46,18 @@ export async function resolveMediaFile(
       .from(assets)
       .innerJoin(files, eq(files.id, assets.fileId))
       .where(eq(assets.id, assetId));
-    return row ? { file: row.file, mimeType: row.mimeType ?? row.file.mimeType, filename: row.filename } : null;
+    return row
+      ? { file: row.file, mimeType: row.mimeType ?? row.file.mimeType, filename: row.filename }
+      : null;
   }
   const [row] = await db
     .select({ file: files, mimeType: assetFiles.mimeType })
     .from(assetFiles)
     .innerJoin(files, eq(files.id, assetFiles.fileId))
     .where(and(eq(assetFiles.assetId, assetId), eq(assetFiles.kind, DERIVED_KIND[variant])));
-  return row ? { file: row.file, mimeType: row.mimeType ?? row.file.mimeType, filename: null } : null;
+  return row
+    ? { file: row.file, mimeType: row.mimeType ?? row.file.mimeType, filename: null }
+    : null;
 }
 
 /** Which variants exist for each asset (`original` always does). */
@@ -125,7 +129,10 @@ export async function sendMediaFile(
   };
 
   const ifNoneMatch = c.req.header('if-none-match');
-  if (ifNoneMatch && ifNoneMatch.split(',').some((tag) => tag.trim().replace(/^W\//, '') === etag)) {
+  if (
+    ifNoneMatch &&
+    ifNoneMatch.split(',').some((tag) => tag.trim().replace(/^W\//, '') === etag)
+  ) {
     return new Response(null, { status: 304, headers });
   }
 
@@ -134,7 +141,10 @@ export async function sendMediaFile(
   const rangeHeader = ifRange && ifRange !== etag ? undefined : c.req.header('range');
   const range = parseRange(rangeHeader, size);
   if (range === 'invalid') {
-    return new Response(null, { status: 416, headers: { ...headers, 'Content-Range': `bytes */${size}` } });
+    return new Response(null, {
+      status: 416,
+      headers: { ...headers, 'Content-Range': `bytes */${size}` },
+    });
   }
 
   // Hono answers HEAD by running the GET route and dropping the body, so don't open a stream.
@@ -152,5 +162,8 @@ export async function sendMediaFile(
       },
     });
   }
-  return new Response(body, { status: 200, headers: { ...headers, 'Content-Length': String(size) } });
+  return new Response(body, {
+    status: 200,
+    headers: { ...headers, 'Content-Length': String(size) },
+  });
 }

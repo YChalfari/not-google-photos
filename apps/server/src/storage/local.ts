@@ -50,6 +50,11 @@ export class LocalStorageProvider implements StorageProvider {
     return path.join(this.root, key);
   }
 
+  /** Absolute path of a stored blob. Thumbnail and EXIF tools read the file in place. */
+  localPath(key: string): string {
+    return this.pathFor(key);
+  }
+
   async put(source: BlobSource, options: PutOptions = {}): Promise<StoredBlob> {
     await this.guard?.assertWritable();
     const tmpDir = path.join(this.root, 'tmp');
@@ -73,7 +78,11 @@ export class LocalStorageProvider implements StorageProvider {
     });
 
     try {
-      await pipeline(toReadable(source), hasher, createWriteStream(tmpPath, { flags: 'wx', flush: true }));
+      await pipeline(
+        toReadable(source),
+        hasher,
+        createWriteStream(tmpPath, { flags: 'wx', flush: true }),
+      );
       const digest = { sha1: sha1.digest('hex'), sha256: sha256.digest('hex') };
       if (options.expectedSha1 && options.expectedSha1 !== digest.sha1) {
         throw new ChecksumMismatchError('sha1', options.expectedSha1, digest.sha1);

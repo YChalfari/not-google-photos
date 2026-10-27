@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Not Google Photos</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <p class="eyebrow">Not Google Photos</p>
+      <h1>Backup on this phone</h1>
+      <p class="lede" id="lede">Checking whether this device can back up its camera roll.</p>
+    </header>
+
+    <main>
+      <section class="card" id="status-card">
+        <div class="card-head">
+          <h2>Queue</h2>
+          <button type="button" id="refresh">Refresh</button>
+        </div>
+        <p class="route" id="route">No deep link open.</p>
+        <dl class="stats" id="stats"></dl>
+        <p class="detail" id="detail"></p>
+      </section>
+
+      <section class="card">
+        <h2>Permissions</h2>
+        <p class="hint" id="permissions">Not checked yet.</p>
+        <div class="row">
+          <button type="button" id="request-permissions">Allow photos and notifications</button>
+          <button type="button" id="battery" class="ghost">Battery optimization</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Server</h2>
+        <p class="hint">On your home network the address can be plain HTTP. Away from home it has to be HTTPS.</p>
+        <form id="connect" class="stack">
+          <label>Home address <input name="homeUrl" type="url" inputmode="url" placeholder="http://192.168.1.20:4810" autocomplete="off" /></label>
+          <label>Away address <input name="remoteUrl" type="url" inputmode="url" placeholder="https://photos.example.com" autocomplete="off" /></label>
+          <label>Pairing code <input name="code" inputmode="text" autocomplete="off" spellcheck="false" /></label>
+          <div class="row">
+            <button type="submit">Pair this phone</button>
+            <button type="button" id="save-address" class="ghost">Save address</button>
+            <button type="button" id="discover" class="ghost">Find on the network</button>
+          </div>
+        </form>
+        <ul class="servers" id="servers"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Run</h2>
+        <div class="row">
+          <button type="button" id="sync">Back up now</button>
+          <button type="button" id="retry" class="ghost">Retry failed</button>
+          <button type="button" id="schedule" class="ghost">Use the default schedule</button>
+        </div>
+        <div class="row">
+          <button type="button" id="folders" class="ghost">List folders</button>
+          <button type="button" id="memories" class="ghost">Memory notifications at 09:00</button>
+        </div>
+        <ul class="folders" id="folders-list"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Activity</h2>
+        <ol class="log" id="log"></ol>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

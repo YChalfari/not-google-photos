@@ -1,0 +1,15 @@
+node_modules
+dist
+.DS_Store
+
+# Android
+android/.gradle
+android/build
+android/app/build
+android/capacitor-cordova-android-plugins/build
+android/local.properties
+android/.idea
+*.iml
+captures
+.externalNativeBuild
+.cxx

@@ -15,6 +15,7 @@ import {
 } from '../db/schema';
 import { loadDotEnv, parseEnv } from '../env';
 import { createLogger } from '../logger';
+import { processAsset } from '../media/derivatives';
 import {
   SAMPLE_ACCOUNTS,
   SAMPLE_ALBUM,
@@ -153,6 +154,12 @@ try {
         stats.coverId ??= row!.id;
       }
     }
+  }
+
+  for (const assetId of assetIds.values()) {
+    // Dates, places, and camera fields are already taken from the sample EXIF. Only the
+    // thumbnails are missing, and re-reading EXIF would replace "Asia/Jerusalem" with an offset.
+    await processAsset(ctx, assetId, { exif: false });
   }
 
   for (const [key, stats] of faceCounts) {

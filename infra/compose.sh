@@ -35,4 +35,7 @@ case "$LIBRARY_DIR" in
 esac
 export LIBRARY_DIR
 
-exec docker compose -f "$here/docker-compose.yml" "${env_args[@]}" "$@"
+if [[ ${#env_args[@]} -gt 0 ]]; then
+  exec docker compose -f "$here/docker-compose.yml" "${env_args[@]}" "$@"
+fi
+exec docker compose -f "$here/docker-compose.yml" "$@"

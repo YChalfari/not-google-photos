@@ -67,9 +67,10 @@ describe('health, identity, and the contract surface', () => {
     });
     expect(doc.paths['/api/timeline/buckets']?.get).toMatchObject({
       operationId: 'timeline.buckets',
-      'x-implemented': false,
+      'x-implemented': true,
     });
-    expect(doc.paths['/api/assets']?.post?.['x-implemented']).toBe(false);
+    expect(doc.paths['/api/assets']?.post?.['x-implemented']).toBe(true);
+    expect(doc.paths['/api/people']?.get?.['x-implemented']).toBe(false);
   });
 
   it('answers unimplemented endpoints with 501 after the auth check', async () => {
@@ -78,9 +79,9 @@ describe('health, identity, and the contract surface', () => {
 
     await createUser(t.ctx, { email: 'alex@example.com', role: 'admin' });
     const client = await signIn(t.app, 'alex@example.com');
-    const timeline = await client.call('timeline.buckets');
-    expect(timeline.status).toBe(501);
-    expect(timeline.error?.code).toBe('not_implemented');
+    const search = await client.call('search.query');
+    expect(search.status).toBe(501);
+    expect(search.error?.code).toBe('not_implemented');
 
     const people = await client.call('people.list');
     expect(people.status).toBe(501);

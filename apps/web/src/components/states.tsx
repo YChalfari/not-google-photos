@@ -1,18 +1,21 @@
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { errorMessage } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 export function Page({
   title,
   lede,
+  wide = false,
   children,
 }: {
   title: string;
   lede?: string;
+  wide?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={cn('mx-auto flex w-full flex-col gap-6', wide ? 'max-w-6xl' : 'max-w-3xl')}>
       <header>
         <h1 className="font-serif text-3xl font-medium tracking-tight text-balance">{title}</h1>
         {lede ? <p className="mt-2 max-w-2xl text-muted-foreground">{lede}</p> : null}

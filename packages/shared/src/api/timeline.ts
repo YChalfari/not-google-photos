@@ -4,6 +4,7 @@ import { QueryBool } from '../primitives';
 import { AssetSummary } from './assets';
 
 export const TimelineScope = z.enum(['library', 'favorites', 'archive', 'trash']);
+export type TimelineScope = z.infer<typeof TimelineScope>;
 
 export const TimelineQuery = z.object({
   scope: TimelineScope.default('library'),

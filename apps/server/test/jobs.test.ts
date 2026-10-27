@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { hashToken } from '../src/auth/tokens';
-import { files, pairingCodes, sessions } from '../src/db/schema';
+import { assets, files, pairingCodes, sessions } from '../src/db/schema';
 import { cleanupExpired, collectUnreferencedFiles } from '../src/jobs/maintenance';
 import { createUser, insertAsset } from './support/factories';
 import { createTestServer, type TestServer } from './support/server';
@@ -52,12 +52,35 @@ describe('maintenance jobs', () => {
     ]);
 
     const result = await cleanupExpired(t.ctx.db, now);
-    expect(result).toEqual({ sessions: 1, pairingCodes: 2 });
+    expect(result).toEqual({ sessions: 1, pairingCodes: 2, trashedAssets: 0 });
 
     const leftSessions = await t.ctx.db.select().from(sessions);
     expect(leftSessions.map((row) => row.tokenHash)).toEqual([hashToken('ngps_live')]);
     const leftCodes = await t.ctx.db.select().from(pairingCodes);
     expect(leftCodes.map((row) => row.codeHash)).toEqual([hashToken('pending-code')]);
+  });
+
+  it('deletes assets that have been in the trash for 30 days and keeps newer ones', async () => {
+    const user = await createUser(t.ctx, { email: 'trash@example.com' });
+    const old = await insertAsset(t.ctx, user.id, { bytes: randomBytes(16) });
+    const recent = await insertAsset(t.ctx, user.id, { bytes: randomBytes(16) });
+    const now = new Date('2026-10-26T12:00:00Z');
+    await t.ctx.db
+      .update(assets)
+      .set({ trashedAt: new Date(now.getTime() - 31 * DAY_MS) })
+      .where(eq(assets.id, old.id));
+    await t.ctx.db
+      .update(assets)
+      .set({ trashedAt: new Date(now.getTime() - 2 * DAY_MS) })
+      .where(eq(assets.id, recent.id));
+
+    const result = await cleanupExpired(t.ctx.db, now);
+    expect(result.trashedAssets).toBe(1);
+    const left = await t.ctx.db
+      .select({ id: assets.id })
+      .from(assets)
+      .where(eq(assets.ownerId, user.id));
+    expect(left.map((row) => row.id)).toEqual([recent.id]);
   });
 
   it('removes unreferenced blobs past the grace period and keeps the rest', async () => {
@@ -73,7 +96,10 @@ describe('maintenance jobs', () => {
     expect(result.removed).toBe(1);
 
     const remaining = await t.ctx.db.select({ id: files.id }).from(files);
-    expect(remaining.map((row) => row.id).sort()).toEqual([fresh.id, kept.fileId].sort());
+    const remainingIds = remaining.map((row) => row.id);
+    expect(remainingIds).toContain(fresh.id);
+    expect(remainingIds).toContain(kept.fileId);
+    expect(remainingIds).not.toContain(orphan.id);
     expect(await t.ctx.files.storage.stat(orphan.storageKey)).toBeNull();
     const keptFile = await t.ctx.files.get(kept.fileId);
     expect(await t.ctx.files.storage.stat(keptFile!.storageKey)).not.toBeNull();

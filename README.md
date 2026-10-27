@@ -2,7 +2,7 @@
 
 A self-hosted photo library for one household. Photos stay on a machine you control. Each person has their own account. Phones sign in by scanning a pairing code, and identical files are stored once even when two people both have them.
 
-This repository is the foundation: accounts, invites, sessions, device tokens, the database, content-addressed storage, and the app shell. Uploading, the timeline, face grouping, and search are the next pieces. Those API routes answer **501** until then, and they are already described in `GET /api/openapi.json`.
+Accounts, invites, sessions, device tokens, content-addressed storage, uploads, thumbnails, and the timeline are in place. Face grouping, albums, search, and memories are described in `GET /api/openapi.json` and answer **501** until their handlers exist.
 
 ## Run it on this computer
 
