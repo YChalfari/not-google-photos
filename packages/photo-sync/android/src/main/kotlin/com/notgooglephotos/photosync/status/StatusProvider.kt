@@ -104,10 +104,13 @@ class StatusProvider(
         if (phase != SyncPhase.IDLE) return null
         val paused = store.uploadsPausedUntil?.let { it > clock.now() } == true
         if (paused && pending + uploading + failed > 0) return "backoff"
-        if (!store.firstBackupComplete && backlog > 0) return "firstBackup"
         val network = conditions.network()
-        if (pending > 0 && settings.wifiOnly && !network.unmetered) return "wifi"
-        if (pending > 0 && !network.connected) return "network"
+        val olderRemaining = !store.firstBackupComplete && backlog > 0
+        if (olderRemaining || pending > 0) {
+            if (!network.connected) return "network"
+            if ((settings.wifiOnly || olderRemaining) && !network.unmetered) return "wifi"
+        }
+        if (olderRemaining && settings.requireCharging && !conditions.isCharging()) return "charging"
         if (pending > 0 && settings.requireCharging && settings.includeVideos && settings.videosOnlyWhileCharging && !conditions.isCharging()) {
             val breakdown = db.media().pendingBreakdown()
             val photos = breakdown.filter { it.kind == MediaKind.IMAGE }.sumOf { it.count }
@@ -116,12 +119,17 @@ class StatusProvider(
         }
         val outcome = RunOutcome.fromJs(lastOutcome)
         if ((pending > 0 || backlog > 0) &&
-            (outcome == RunOutcome.SERVER_UNREACHABLE || outcome == RunOutcome.UPLOAD_FAILED || outcome == RunOutcome.WAITING_FOR_CHARGING)
+            (outcome == RunOutcome.SERVER_UNREACHABLE || outcome == RunOutcome.UPLOAD_FAILED)
         ) {
-            return if (outcome == RunOutcome.WAITING_FOR_CHARGING) "charging" else "server"
+            return "server"
         }
-        if (outcome == RunOutcome.WAITING_FOR_WIFI && pending + backlog > 0) return "wifi"
-        if (outcome == RunOutcome.WAITING_FOR_NETWORK && pending + backlog > 0) return "network"
+        if (outcome == RunOutcome.WAITING_FOR_CHARGING && (pending > 0 || backlog > 0) &&
+            settings.requireCharging && !conditions.isCharging()
+        ) {
+            return "charging"
+        }
+        if (outcome == RunOutcome.WAITING_FOR_WIFI && pending + backlog > 0 && !network.unmetered) return "wifi"
+        if (outcome == RunOutcome.WAITING_FOR_NETWORK && pending + backlog > 0 && !network.connected) return "network"
         return null
     }
 }

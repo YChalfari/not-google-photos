@@ -165,6 +165,9 @@ class PhotoSyncPlugin : Plugin() {
 
     @PluginMethod
     fun syncNow(call: PluginCall) {
+        // Start in this process so the Backup screen leaves Idle while it is open. The worker
+        // covers the same run if this process is closed.
+        scope.launch(Dispatchers.IO) { runtime.engine.run(RunTrigger.MANUAL) }
         runtime.coordinator.syncNow()
         call.resolve()
     }

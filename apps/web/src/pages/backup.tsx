@@ -1,6 +1,6 @@
 import { DEFAULT_TRIGGERS, PhotoSync, type MediaFolder, type SyncStatus } from '@ngp/photo-sync';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DeleteBackedUpCard } from '@/components/delete-backed-up';
 import { FormError, LoadingBlock, Page } from '@/components/states';
 import { Button } from '@/components/ui/button';
@@ -66,6 +66,8 @@ function PhoneBackup() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const startedBackup = useRef(false);
   const status = statusQuery.data ?? null;
   const permissions = permissionsQuery.data ?? null;
   const requireCharging = settingsQuery.data?.settings.requireCharging ?? true;
@@ -92,12 +94,17 @@ function PhoneBackup() {
   async function run(label: string, action: () => Promise<unknown>) {
     setBusy(label);
     setError(null);
+    setNotice(null);
+    const started = Date.now();
     try {
       await action();
       await queryClient.invalidateQueries({ queryKey: ['backup'] });
+      setNotice(ACTION_NOTE[label] ?? null);
     } catch (caught) {
       setError(caught);
     } finally {
+      const remaining = 500 - (Date.now() - started);
+      if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
       setBusy(null);
     }
   }
@@ -124,6 +131,18 @@ function PhoneBackup() {
   }
 
   const detail = status ? describe(status, requireCharging) : '';
+  const readyToRun =
+    status?.configured === true &&
+    status.enabled &&
+    status.phase === 'idle' &&
+    status.waitingFor === null &&
+    (status.counts.pending > 0 || status.firstBackup.remaining > 0);
+
+  useEffect(() => {
+    if (startedBackup.current || busy || !readyToRun) return;
+    startedBackup.current = true;
+    void run('sync', () => PhotoSync.syncNow());
+  }, [readyToRun, busy]);
 
   return (
     <Page
@@ -139,9 +158,11 @@ function PhoneBackup() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => void queryClient.invalidateQueries({ queryKey: ['backup'] })}
+            disabled={busy !== null}
+            aria-busy={busy === 'refresh'}
+            onClick={() => void run('refresh', () => queryClient.invalidateQueries({ queryKey: ['backup'] }))}
           >
-            Refresh
+            {busy === 'refresh' ? 'Refreshing…' : 'Refresh'}
           </Button>
         </CardHeader>
         <CardContent>
@@ -166,6 +187,7 @@ function PhoneBackup() {
               {formatEpoch(status.lastServerContactAt)}.
             </p>
           ) : null}
+          {notice ? <p className="mt-3 text-sm">{notice}</p> : null}
         </CardContent>
       </Card>
 
@@ -193,19 +215,21 @@ function PhoneBackup() {
           <Button
             type="button"
             disabled={busy !== null}
+            aria-busy={busy === 'permissions'}
             onClick={() => void run('permissions', () => PhotoSync.requestPermissions())}
           >
-            Allow photos and notifications
+            {busy === 'permissions' ? 'Asking…' : 'Allow photos and notifications'}
           </Button>
           <Button
             type="button"
             variant="outline"
             disabled={busy !== null}
+            aria-busy={busy === 'battery'}
             onClick={() =>
               void run('battery', () => PhotoSync.requestBatteryOptimizationExemption())
             }
           >
-            Battery optimization
+            {busy === 'battery' ? 'Opening…' : 'Battery optimization'}
           </Button>
         </CardContent>
       </Card>
@@ -215,7 +239,7 @@ function PhoneBackup() {
           <CardTitle>Run</CardTitle>
           <CardDescription>
             New photos wait about a minute, then an hourly pass runs. {olderPhotoWait(requireCharging)}{' '}
-            Back up now checks them against the server immediately.
+            Back up now starts that upload immediately.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -243,22 +267,25 @@ function PhoneBackup() {
             <Button
               type="button"
               disabled={busy !== null}
+              aria-busy={busy === 'sync'}
               onClick={() => void run('sync', () => PhotoSync.syncNow())}
             >
-              Back up now
+              {busy === 'sync' ? 'Starting backup…' : 'Back up now'}
             </Button>
             <Button
               type="button"
               variant="outline"
               disabled={busy !== null}
+              aria-busy={busy === 'retry'}
               onClick={() => void run('retry', () => PhotoSync.retryFailed())}
             >
-              Retry failed
+              {busy === 'retry' ? 'Retrying…' : 'Retry failed'}
             </Button>
             <Button
               type="button"
               variant="outline"
               disabled={busy !== null}
+              aria-busy={busy === 'schedule'}
               onClick={() =>
                 void run('schedule', () =>
                   PhotoSync.setSchedule({
@@ -267,15 +294,16 @@ function PhoneBackup() {
                 )
               }
             >
-              Use the default schedule
+              {busy === 'schedule' ? 'Saving…' : 'Use the default schedule'}
             </Button>
             <Button
               type="button"
               variant="outline"
               disabled={busy !== null}
+              aria-busy={busy === 'folders'}
               onClick={() => void run('folders', loadFolders)}
             >
-              {folders ? 'Refresh folders' : 'Choose folders'}
+              {busy === 'folders' ? 'Loading folders…' : folders ? 'Refresh folders' : 'Choose folders'}
             </Button>
           </div>
           {folders ? (
@@ -325,6 +353,17 @@ function olderPhotoWait(requireCharging: boolean): string {
     : 'Older photos upload on Wi-Fi even when this phone is not plugged in.';
 }
 
+const ACTION_NOTE: Record<string, string> = {
+  sync: 'Backup started. The queue changes to Hashing while it reads the photos.',
+  retry: 'Failed photos were queued again.',
+  schedule: 'Schedule saved.',
+  charging: 'Saved. Older photos start when this phone is on Wi-Fi.',
+  permissions: 'Permission request finished.',
+  battery: 'Battery settings opened.',
+  folders: 'Folders loaded.',
+  refresh: 'Queue reloaded.',
+};
+
 function describe(status: SyncStatus, requireCharging: boolean): string {
   const waiting =
     status.waitingFor === 'firstBackup'
@@ -336,6 +375,8 @@ function describe(status: SyncStatus, requireCharging: boolean): string {
   const paired = status.configured ? 'Paired with a server.' : 'No server paired yet.';
   const first = status.firstBackup.complete
     ? ''
-    : ` First backup still has ${status.firstBackup.remaining} older items.`;
+    : status.phase === 'idle'
+      ? ` ${status.firstBackup.remaining} older photos are still waiting.`
+      : ` First backup still has ${status.firstBackup.remaining} older items.`;
   return `${phase}. ${waiting}${paired}${first}`;
 }

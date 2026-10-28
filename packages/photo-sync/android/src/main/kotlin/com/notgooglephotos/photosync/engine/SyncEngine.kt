@@ -183,9 +183,12 @@ class SyncEngine(
             }
 
             // Later passes pick up photos taken while this run was uploading.
-            // Back up now, and the charging first-backup job, may upload older photos.
-            // Every other run only asks the server which of those it already has.
-            val uploadBacklog = trigger == RunTrigger.FIRST_BACKUP || trigger == RunTrigger.MANUAL || store.firstBackupComplete
+            // Back up now, the charging first-backup job, and any run once charging is not
+            // required, upload older photos. Every other run only asks which ones the server has.
+            val uploadBacklog = !settings.requireCharging ||
+                trigger == RunTrigger.FIRST_BACKUP ||
+                trigger == RunTrigger.MANUAL ||
+                store.firstBackupComplete
             var fullScan = trigger == RunTrigger.RECONCILE || options.fullScan
             for (pass in 1..MAX_PASSES) {
                 phase(SyncPhase.SCANNING)

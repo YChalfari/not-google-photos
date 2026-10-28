@@ -23,7 +23,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         coroutineScope {
             val progress = if (firstBackup) launch { showProgress(runtime) } else null
             try {
-                val report = runtime.engine.run(trigger, RunOptions(waitIfBusy = firstBackup))
+                val report = runtime.engine.run(trigger, RunOptions(waitIfBusy = firstBackup || trigger == RunTrigger.MANUAL))
                 Log.i(TAG, "${trigger.js} -> ${report.outcome?.js ?: "busy"} uploaded=${report.uploaded} failed=${report.failed} requests=${report.requests} ${report.message.orEmpty()}")
             } finally {
                 progress?.cancel()

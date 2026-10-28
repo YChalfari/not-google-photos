@@ -35,12 +35,14 @@ class BackupCoordinator(
         }
         var serverChanged = false
         var grew = false
+        var chargingLifted = false
         store.updateSettings { previous ->
             val next = previous.merge(patch)
             serverChanged = next.homeUrl != previous.homeUrl ||
                 next.remoteUrl != previous.remoteUrl ||
                 (next.serverId != null && previous.serverId != null && next.serverId != previous.serverId)
             grew = SyncSettings.grew(previous, next)
+            chargingLifted = previous.requireCharging && !next.requireCharging
             next
         }
         if (serverChanged) {
@@ -68,7 +70,8 @@ class BackupCoordinator(
         }
         scheduler.apply()
         val firstConnection = store.isConfigured && (!hadToken || !hadServer)
-        val sync = store.isConfigured && !store.needsPairing && store.settings.enabled && (firstConnection || grew || serverChanged)
+        val sync = store.isConfigured && !store.needsPairing && store.settings.enabled &&
+            (firstConnection || grew || serverChanged || chargingLifted)
         return Applied(sync, fullScan)
     }
 

@@ -303,6 +303,21 @@ class SyncEngineTest {
     }
 
     @Test
+    fun normalRunUploadsOlderPhotosWhenChargingIsNotRequired() {
+        fx.store.firstBackupComplete = false
+        fx.store.backlogCutoffMs = fx.clock.nowMs
+        fx.store.settings = fx.store.settings.copy(requireCharging = false)
+        val cutoff = fx.clock.nowMs / 1000
+        fx.conditions.charging = false
+        fx.add("old.jpg", dateAdded = cutoff - 100, captureTime = 1)
+        val report = fx.run(RunTrigger.INTERVAL)
+        assertEquals(RunOutcome.COMPLETED, report.outcome)
+        assertEquals(1, report.uploaded)
+        assertEquals("old.jpg", fx.server.uploads.single().fileName)
+        assertTrue(fx.store.firstBackupComplete)
+    }
+
+    @Test
     fun videosWaitUntilThePhoneIsCharging() {
         fx.conditions.charging = false
         fx.add("still.jpg", captureTime = 2)
