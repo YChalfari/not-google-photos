@@ -7,7 +7,9 @@ android {
     def keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
     def keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
     def keyAliasName = System.getenv("ANDROID_KEY_ALIAS")
-    def keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+    // Not named keyPassword: inside signingConfigs that name is the setter, and Groovy
+    // would try to call the password string as a method.
+    def releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
 
     defaultConfig {
         applicationId "com.notgooglephotos.app"
@@ -29,7 +31,7 @@ android {
                 storeFile file(keystorePath)
                 storePassword keystorePassword
                 keyAlias keyAliasName
-                keyPassword keyPassword
+                keyPassword releaseKeyPassword
             }
         }
     }
