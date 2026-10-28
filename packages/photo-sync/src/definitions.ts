@@ -32,10 +32,16 @@ export interface PhotoSyncPlugin {
   /** A snapshot of the queue and the engine. */
   getStatus(): Promise<SyncStatus>;
 
-  /** Media on the phone that the server has confirmed, with the space it would free. (A6, not implemented yet.) */
+  /**
+   * Media still on the phone that the server has just confirmed, with the space deleting it would free.
+   * Asks the server before counting, and rejects when the server cannot be checked.
+   */
   getFreeableSummary(filter: FreeUpFilter): Promise<FreeableSummary>;
 
-  /** Moves confirmed media to the system trash after the server re-verifies it. (A6, not implemented yet.) */
+  /**
+   * Permanently deletes confirmed media from the phone after the server re-verifies each file.
+   * Android then shows its own allow-delete dialog. Nothing is removed from the library.
+   */
   freeUpSpace(filter: FreeUpFilter): Promise<FreeUpResult>;
 
   /**
@@ -330,11 +336,15 @@ export interface DiscoveredServer {
 }
 
 export interface FreeUpFilter {
-  /** Only include items older than this many days. Today's items are always kept. */
+  /**
+   * Only include items captured at least this many days ago.
+   * Omit it, or pass 0, to include every backed-up item, including today's.
+   */
   olderThanDays?: number;
   /** Keep items marked as favorites on the phone. Default true. */
   keepFavorites?: boolean;
   mediaType?: 'all' | 'photos' | 'videos';
+  /** Limit to these folders. Omit to include every backed-up item still on the phone. */
   folders?: FolderId[];
 }
 
@@ -346,11 +356,11 @@ export interface FreeableSummary {
 }
 
 export interface FreeUpResult {
-  /** Items moved to the system trash. */
+  /** Items permanently deleted from the phone. */
   deleted: number;
   bytesFreed: number;
-  /** Items skipped because the server couldn't re-verify them. */
+  /** Items left on the phone because the server could not confirm them. */
   skippedUnverified: number;
-  /** True when the person declined the system confirmation. */
+  /** True when the person declined Android's confirmation. Batches already allowed stay deleted. */
   cancelled: boolean;
 }

@@ -1,6 +1,7 @@
 package com.notgooglephotos.photosync
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -21,9 +22,14 @@ import com.getcapacitor.annotation.PermissionCallback
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.notgooglephotos.photosync.engine.DeletionTarget
+import com.notgooglephotos.photosync.engine.FreeUpFilter
+import com.notgooglephotos.photosync.engine.FreeUpRejected
+import com.notgooglephotos.photosync.engine.FreeUpRules
 import com.notgooglephotos.photosync.engine.RunOptions
 import com.notgooglephotos.photosync.engine.RunTrigger
 import com.notgooglephotos.photosync.engine.SyncPhase
+import com.notgooglephotos.photosync.media.MediaDeleteActivity
 import com.notgooglephotos.photosync.model.SyncSettings
 import com.notgooglephotos.photosync.model.SyncTrigger
 import com.notgooglephotos.photosync.model.TimeOfDay
@@ -57,6 +63,7 @@ private const val PERMISSION_NOTIFICATIONS = "notifications"
 class PhotoSyncPlugin : Plugin() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var runtime: PhotoSyncRuntime
+    private var deletion: DeletionSession? = null
 
     override fun load() {
         runtime = PhotoSyncRuntime.get(context)
@@ -97,6 +104,7 @@ class PhotoSyncPlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        deletion = null
         scope.cancel()
     }
 
@@ -226,12 +234,122 @@ class PhotoSyncPlugin : Plugin() {
 
     @PluginMethod
     fun getFreeableSummary(call: PluginCall) {
-        call.reject(NOT_YET)
+        val filter = try {
+            FreeUpFilter.parse(call.data)
+        } catch (e: FreeUpRejected) {
+            call.reject(e.message)
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            try {
+                val summary = runtime.coordinator.freeable(filter)
+                call.resolve(
+                    JSObject()
+                        .put("count", summary.count)
+                        .put("bytes", summary.bytes)
+                        .put("photos", summary.photos)
+                        .put("videos", summary.videos),
+                )
+            } catch (e: FreeUpRejected) {
+                call.reject(e.message)
+            } catch (e: Exception) {
+                call.reject(e.message ?: "Couldn't check which photos the server has")
+            }
+        }
     }
 
     @PluginMethod
     fun freeUpSpace(call: PluginCall) {
-        call.reject(NOT_YET)
+        if (deletion != null) {
+            call.reject("A deletion is already in progress")
+            return
+        }
+        if (Build.VERSION.SDK_INT < 30) {
+            call.reject("Deleting backed-up photos needs Android 11 or newer")
+            return
+        }
+        val filter = try {
+            FreeUpFilter.parse(call.data)
+        } catch (e: FreeUpRejected) {
+            call.reject(e.message)
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            val plan = try {
+                runtime.coordinator.prepareDeletion(filter)
+            } catch (e: FreeUpRejected) {
+                call.reject(e.message)
+                return@launch
+            } catch (e: Exception) {
+                call.reject(e.message ?: "Couldn't check which photos the server has")
+                return@launch
+            }
+            if (plan.targets.isEmpty()) {
+                call.resolve(deletionResult(0, 0, plan.skippedUnverified, false))
+                return@launch
+            }
+            val session = DeletionSession(
+                skippedUnverified = plan.skippedUnverified,
+                remaining = plan.targets.chunked(FreeUpRules.DELETE_BATCH).toMutableList(),
+            )
+            withContext(Dispatchers.Main) {
+                if (activity == null) {
+                    call.reject("Open the app to delete backed-up photos")
+                    return@withContext
+                }
+                deletion = session
+                launchDeletionBatch(call, session.remaining.first())
+            }
+        }
+    }
+
+    @ActivityCallback
+    private fun freeUpResult(call: PluginCall, result: ActivityResult) {
+        val session = deletion
+        if (session == null) {
+            call.reject("The deletion was interrupted")
+            return
+        }
+        val error = result.data?.getStringExtra(MediaDeleteActivity.EXTRA_ERROR)
+        if (!error.isNullOrBlank()) {
+            deletion = null
+            call.reject(error)
+            return
+        }
+        if (result.resultCode != Activity.RESULT_OK) {
+            deletion = null
+            call.resolve(deletionResult(session.deleted, session.bytes, session.skippedUnverified, cancelled = true))
+            return
+        }
+        val batch = session.remaining.removeAt(0)
+        session.deleted += batch.size
+        session.bytes += batch.sumOf { it.bytes }
+        scope.launch(Dispatchers.IO) {
+            try {
+                runtime.coordinator.markDeletedFromPhone(batch.map(DeletionTarget::id))
+            } catch (e: Exception) {
+                deletion = null
+                call.reject(e.message ?: "The photos were deleted, but the queue could not be updated")
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                val more = session.remaining.isNotEmpty() && activity != null
+                if (more) {
+                    launchDeletionBatch(call, session.remaining.first())
+                } else {
+                    val stoppedEarly = session.remaining.isNotEmpty()
+                    deletion = null
+                    call.resolve(
+                        deletionResult(
+                            session.deleted,
+                            session.bytes,
+                            session.skippedUnverified,
+                            cancelled = stoppedEarly,
+                        ),
+                    )
+                }
+            }
+        }
     }
 
     @PluginMethod
@@ -416,9 +534,27 @@ class PhotoSyncPlugin : Plugin() {
         .joinToString(" ")
         .ifBlank { "Android phone" }
 
+    private fun launchDeletionBatch(call: PluginCall, batch: List<DeletionTarget>) {
+        val intent = Intent(context, MediaDeleteActivity::class.java)
+            .putStringArrayListExtra(MediaDeleteActivity.EXTRA_URIS, ArrayList(batch.map { it.uri }))
+        startActivityForResult(call, intent, "freeUpResult")
+    }
+
+    private fun deletionResult(deleted: Int, bytes: Long, skipped: Int, cancelled: Boolean) = JSObject()
+        .put("deleted", deleted)
+        .put("bytesFreed", bytes)
+        .put("skippedUnverified", skipped)
+        .put("cancelled", cancelled)
+
+    private class DeletionSession(
+        val skippedUnverified: Int,
+        val remaining: MutableList<List<DeletionTarget>>,
+        var deleted: Int = 0,
+        var bytes: Long = 0,
+    )
+
     companion object {
         private const val TAG = "PhotoSync"
-        private const val NOT_YET = "Free up space isn't available yet"
         private const val PROGRESS_MIN_GAP_MS = 400L
     }
 }

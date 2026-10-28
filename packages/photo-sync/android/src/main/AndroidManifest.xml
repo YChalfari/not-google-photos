@@ -41,6 +41,12 @@
             android:name=".notify.NotificationActionReceiver"
             android:exported="false" />
 
+        <activity
+            android:name="com.notgooglephotos.photosync.media.MediaDeleteActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="barcode_ui" />

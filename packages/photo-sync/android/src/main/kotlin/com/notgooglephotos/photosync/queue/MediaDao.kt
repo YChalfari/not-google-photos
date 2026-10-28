@@ -198,6 +198,25 @@ abstract class MediaDao {
     @Query("DELETE FROM media_items WHERE present = 0")
     abstract suspend fun deleteNotPresent()
 
+    /** Backed-up files still on the phone. These are the only rows free-up space may remove. */
+    @Query(
+        """
+        SELECT * FROM media_items
+        WHERE present = 1 AND state = 'BACKED_UP' AND checksum IS NOT NULL
+        ORDER BY capture_time DESC, id DESC
+        """,
+    )
+    abstract suspend fun backedUpPresent(): List<MediaItemEntity>
+
+    /** Marks files Android has deleted so the queue stops counting them as on the phone. */
+    @Transaction
+    open suspend fun markNotPresent(ids: List<Long>) {
+        ids.distinct().chunked(500).forEach { markNotPresentChunk(it) }
+    }
+
+    @Query("UPDATE media_items SET present = 0 WHERE id IN (:ids)")
+    protected abstract suspend fun markNotPresentChunk(ids: List<Long>)
+
     @Query("DELETE FROM media_items WHERE id = :id")
     abstract suspend fun delete(id: Long)
 }

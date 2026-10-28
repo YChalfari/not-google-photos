@@ -1,6 +1,7 @@
 import { DEFAULT_TRIGGERS, PhotoSync, type MediaFolder, type SyncStatus } from '@ngp/photo-sync';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { DeleteBackedUpCard } from '@/components/delete-backed-up';
 import { FormError, LoadingBlock, Page } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -162,6 +163,16 @@ function PhoneBackup() {
           ) : null}
         </CardContent>
       </Card>
+
+      {status?.configured ? (
+        <DeleteBackedUpCard
+          backedUp={status.counts.backedUp}
+          disabled={busy !== null}
+          onFinished={() => {
+            void queryClient.invalidateQueries({ queryKey: ['backup'] });
+          }}
+        />
+      ) : null}
 
       <Card>
         <CardHeader>

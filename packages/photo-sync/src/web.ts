@@ -2,6 +2,7 @@ import { WebPlugin } from '@capacitor/core';
 
 import type {
   DiscoveredServer,
+  FreeUpFilter,
   FreeableSummary,
   FreeUpResult,
   MediaFolder,
@@ -64,11 +65,11 @@ export class PhotoSyncWeb extends WebPlugin implements PhotoSyncPlugin {
     };
   }
 
-  async getFreeableSummary(): Promise<FreeableSummary> {
+  async getFreeableSummary(_filter: FreeUpFilter): Promise<FreeableSummary> {
     throw this.unavailable(ANDROID_ONLY);
   }
 
-  async freeUpSpace(): Promise<FreeUpResult> {
+  async freeUpSpace(_filter: FreeUpFilter): Promise<FreeUpResult> {
     throw this.unavailable(ANDROID_ONLY);
   }
 

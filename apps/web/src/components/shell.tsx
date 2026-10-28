@@ -39,24 +39,26 @@ export function Shell() {
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
-      <aside className="hidden border-r border-border/80 bg-card/70 md:flex md:flex-col md:px-4 md:py-6">
-        <Brand name={info?.name} />
-        <nav className="mt-8 flex flex-1 flex-col gap-1">
-          {NAV.map((item) => (
-            <SideLink key={item.to} {...item} />
-          ))}
-        </nav>
-        <div className="flex flex-col gap-1 border-t border-border pt-4">
-          {onPhone ? <SideLink to="/backup" label="Backup" icon={CloudUpload} end={false} /> : null}
-          <SideLink to="/settings" label="Settings" icon={Settings} end={false} />
-          {admin ? <SideLink to="/admin" label="Admin" icon={Shield} end={false} /> : null}
-          <button
-            type="button"
-            className="mt-2 rounded-md px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent"
-            onClick={() => void logout()}
-          >
-            {deviceAuth ? 'Unpair this phone' : 'Sign out'}
-          </button>
+      <aside className="hidden border-r border-border/80 bg-card/70 md:block">
+        <div className="sticky top-0 flex h-dvh flex-col overflow-y-auto px-4 py-6">
+          <Brand name={info?.name} />
+          <nav className="mt-8 flex flex-1 flex-col gap-1">
+            {NAV.map((item) => (
+              <SideLink key={item.to} {...item} />
+            ))}
+          </nav>
+          <div className="flex flex-col gap-1 border-t border-border pt-4">
+            {onPhone ? <SideLink to="/backup" label="Backup" icon={CloudUpload} end={false} /> : null}
+            <SideLink to="/settings" label="Settings" icon={Settings} end={false} />
+            {admin ? <SideLink to="/admin" label="Admin" icon={Shield} end={false} /> : null}
+            <button
+              type="button"
+              className="mt-2 rounded-md px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent"
+              onClick={() => void logout()}
+            >
+              {deviceAuth ? 'Unpair this phone' : 'Sign out'}
+            </button>
+          </div>
         </div>
       </aside>
 

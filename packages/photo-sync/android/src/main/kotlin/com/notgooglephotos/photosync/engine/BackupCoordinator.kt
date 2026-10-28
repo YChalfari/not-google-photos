@@ -138,6 +138,18 @@ class BackupCoordinator(
         scheduler.apply()
     }
 
+    private fun freeUp() = FreeUp(db, store, conditions, resolver, clock)
+
+    /** Backed-up files the server still has. Rejects when that check cannot be made. */
+    suspend fun freeable(filter: FreeUpFilter): FreeableSummary = freeUp().summarize(filter)
+
+    /** The files to delete, after the same server check. Does not delete anything itself. */
+    suspend fun prepareDeletion(filter: FreeUpFilter): DeletionPlan = freeUp().prepare(filter)
+
+    suspend fun markDeletedFromPhone(ids: List<Long>) {
+        db.media().markNotPresent(ids)
+    }
+
     fun syncNow() = scheduler.runNow()
 
     suspend fun retryFailed() {

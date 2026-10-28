@@ -28,4 +28,4 @@ Unit tests need Android SDK 36 and Java 21 (`ANDROID_HOME`). They run on the JVM
 
 Plain HTTP is accepted only for private-network hosts. The app's network security config has to allow cleartext; the plugin does not force that on every consumer.
 
-Free up space (`getFreeableSummary`, `freeUpSpace`) is not implemented yet.
+`getFreeableSummary` and `freeUpSpace` delete backed-up originals from the phone after the server confirms the checksums. Android shows its own delete confirmation. The library copies stay.
