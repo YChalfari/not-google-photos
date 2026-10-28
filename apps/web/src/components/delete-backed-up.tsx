@@ -59,10 +59,12 @@ function describeOutcome(result: FreeUpResult): string {
 
 export function DeleteBackedUpCard({
   backedUp,
+  pending,
   disabled,
   onFinished,
 }: {
   backedUp: number;
+  pending: number;
   disabled: boolean;
   onFinished: () => void;
 }) {
@@ -133,7 +135,11 @@ export function DeleteBackedUpCard({
           {busy && !open ? 'Checking the library…' : 'Delete backed-up photos from this phone'}
         </Button>
         {backedUp === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing backed up is still on this phone.</p>
+          <p className="text-sm text-muted-foreground">
+            {pending > 0
+              ? 'These photos have not been confirmed with the server yet. Back up now checks them immediately. Refresh only reloads these numbers.'
+              : 'Nothing backed up is still on this phone.'}
+          </p>
         ) : null}
         {!open ? <FormError error={error} /> : null}
       </CardContent>

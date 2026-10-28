@@ -183,13 +183,17 @@ class SyncEngine(
             }
 
             // Later passes pick up photos taken while this run was uploading.
+            // Back up now, and the charging first-backup job, may upload older photos.
+            // Every other run only asks the server which of those it already has.
+            val uploadBacklog = trigger == RunTrigger.FIRST_BACKUP || trigger == RunTrigger.MANUAL || store.firstBackupComplete
             var fullScan = trigger == RunTrigger.RECONCILE || options.fullScan
             for (pass in 1..MAX_PASSES) {
                 phase(SyncPhase.SCANNING)
                 val scan = indexer.scan(store.settings, fullScan, store.backlogCutoffMs)
                 if (pass > 1 && scan.added + scan.changed == 0) break
                 fullScan = false
-                uploadPending(client, settings)?.let { return it }
+                if (!uploadBacklog) recognizeBacklog(client, settings)?.let { return it }
+                uploadPending(client, settings, uploadBacklog)?.let { return it }
             }
 
             if (!store.firstBackupComplete && store.backlogCutoffMs != null) {
@@ -211,9 +215,25 @@ class SyncEngine(
             }
         }
 
+        /**
+         * Older photos stay out of a normal upload, but the server is asked about them anyway.
+         * A match is marked backed up. A miss stays pending for Back up now or the charging first backup.
+         */
+        private suspend fun recognizeBacklog(client: SyncApiClient, settings: SyncSettings): RunOutcome? {
+            val includeVideos = settings.includeVideos
+            var beforeCapture = Long.MAX_VALUE
+            var beforeId = Long.MAX_VALUE
+            while (true) {
+                val page = db.media().pendingBacklog(includeVideos, beforeCapture, beforeId, SyncApiClient.CHECK_BATCH)
+                if (page.isEmpty()) return null
+                beforeCapture = page.last().captureTime
+                beforeId = page.last().id
+                markAlreadyOnServer(client, page)?.let { return it }
+            }
+        }
+
         /** Hash, check, and upload one page at a time. Returns an outcome when the run has to stop early. */
-        private suspend fun uploadPending(client: SyncApiClient, settings: SyncSettings): RunOutcome? {
-            val includeBacklog = trigger == RunTrigger.FIRST_BACKUP || store.firstBackupComplete
+        private suspend fun uploadPending(client: SyncApiClient, settings: SyncSettings, includeBacklog: Boolean): RunOutcome? {
             val includeVideos = settings.includeVideos && videosAllowedNow(settings)
             val queued = db.media().eligiblePending(includeVideos, includeBacklog)
             if (queued == 0) return null
@@ -226,29 +246,13 @@ class SyncEngine(
                 beforeCapture = page.last().captureTime
                 beforeId = page.last().id
 
-                phase(SyncPhase.HASHING)
-                val hashed = page.mapNotNull { ensureChecksum(it) }
-                if (hashed.isEmpty()) continue
-
-                phase(SyncPhase.CHECKING)
-                val byChecksum = hashed.groupBy { it.checksum!! }
-                val check = when (val result = client.checkAssets(byChecksum.keys.toList())) {
-                    is ApiResult.Ok -> result.value
-                    ApiResult.Unauthorized -> return needsPairing("The server no longer accepts this phone. Pair it again.")
-                    is ApiResult.HttpError -> return pauseUploads(result.message)
-                    is ApiResult.NetworkError -> return pauseUploads(result.message)
-                }
-                for ((checksum, rows) in byChecksum) {
-                    if (checksum in check.missing) continue
-                    db.media().markBackedUp(rows.map { it.id }, check.existing[checksum], clock.now())
-                    alreadyOnServer += rows.size
-                    position += rows.size
-                }
-                bump()
-
+                val checked = hashAndCheck(client, page)
+                checked.stop?.let { return it }
+                val ready = checked.ready ?: continue
+                position += ready.already
                 phase(SyncPhase.UPLOADING)
-                for ((checksum, rows) in byChecksum) {
-                    if (checksum !in check.missing) continue
+                for ((checksum, rows) in ready.byChecksum) {
+                    if (checksum !in ready.missing) continue
                     val item = rows.first()
                     if (item.kind == MediaKind.VIDEO && !videosAllowedNow(settings)) continue
                     position += 1
@@ -256,6 +260,35 @@ class SyncEngine(
                     bump()
                 }
             }
+        }
+
+        /** Hashes [page], marks rows the server already has, and leaves the rest pending. */
+        private suspend fun markAlreadyOnServer(client: SyncApiClient, page: List<MediaItemEntity>): RunOutcome? {
+            val checked = hashAndCheck(client, page)
+            return checked.stop
+        }
+
+        private suspend fun hashAndCheck(client: SyncApiClient, page: List<MediaItemEntity>): CheckedPage {
+            phase(SyncPhase.HASHING)
+            val hashed = page.mapNotNull { ensureChecksum(it) }
+            if (hashed.isEmpty()) return CheckedPage(null, null)
+            phase(SyncPhase.CHECKING)
+            val byChecksum = hashed.groupBy { it.checksum!! }
+            val check = when (val result = client.checkAssets(byChecksum.keys.toList())) {
+                is ApiResult.Ok -> result.value
+                ApiResult.Unauthorized -> return CheckedPage(null, needsPairing("The server no longer accepts this phone. Pair it again."))
+                is ApiResult.HttpError -> return CheckedPage(null, pauseUploads(result.message))
+                is ApiResult.NetworkError -> return CheckedPage(null, pauseUploads(result.message))
+            }
+            var marked = 0
+            for ((checksum, rows) in byChecksum) {
+                if (checksum in check.missing) continue
+                db.media().markBackedUp(rows.map { it.id }, check.existing[checksum], clock.now())
+                alreadyOnServer += rows.size
+                marked += rows.size
+            }
+            if (marked > 0) bump()
+            return CheckedPage(ReadyPage(byChecksum, check.missing, marked), null)
         }
 
         private fun videosAllowedNow(settings: SyncSettings) = !settings.videosOnlyWhileCharging || conditions.isCharging()
@@ -386,6 +419,14 @@ class SyncEngine(
             return RunOutcome.NEEDS_PAIRING
         }
     }
+
+    private class ReadyPage(
+        val byChecksum: Map<String, List<MediaItemEntity>>,
+        val missing: Set<String>,
+        val already: Int,
+    )
+
+    private class CheckedPage(val ready: ReadyPage?, val stop: RunOutcome?)
 
     companion object {
         const val MAX_ATTEMPTS = 10

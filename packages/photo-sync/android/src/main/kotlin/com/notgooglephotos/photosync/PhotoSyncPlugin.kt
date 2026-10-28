@@ -117,6 +117,7 @@ class PhotoSyncPlugin : Plugin() {
     override fun requestPermissions(call: PluginCall) {
         val aliases = permissionAliases()
         if (aliases.isEmpty() || aliases.all { getPermissionState(it) == PermissionState.GRANTED }) {
+            startConfiguredSync()
             call.resolve(permissionStatus())
             return
         }
@@ -125,9 +126,14 @@ class PhotoSyncPlugin : Plugin() {
 
     @PermissionCallback
     private fun permissionsCallback(call: PluginCall) {
+        startConfiguredSync()
+        call.resolve(permissionStatus())
+    }
+
+    /** Runs after photo and location permission, so the first hashes see the original files. */
+    private fun startConfiguredSync() {
         val start = runtime.store.isConfigured && runtime.store.settings.enabled && !runtime.store.needsPairing
         if (start && runtime.library.hasReadAccess()) launchSync(fullScan = false)
-        call.resolve(permissionStatus())
     }
 
     @PluginMethod
@@ -438,7 +444,6 @@ class PhotoSyncPlugin : Plugin() {
             try {
                 if (patch.length() > 0) runtime.coordinator.apply(patch)
                 val paired = runtime.coordinator.pair(code, deviceName)
-                if (runtime.library.hasReadAccess()) launchSync(fullScan = true)
                 call.resolve(
                     JSObject()
                         .put("serverId", paired.serverId ?: JSONObject.NULL)

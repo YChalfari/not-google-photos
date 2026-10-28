@@ -105,6 +105,24 @@ abstract class MediaDao {
         limit: Int,
     ): List<MediaItemEntity>
 
+    /** Older photos still pending, newest first, for a checksum check that does not upload them. */
+    @Query(
+        """
+        SELECT * FROM media_items
+        WHERE present = 1 AND state = 'PENDING' AND backlog = 1
+          AND (:includeVideos OR kind = 'IMAGE')
+          AND (capture_time < :beforeCapture OR (capture_time = :beforeCapture AND id < :beforeId))
+        ORDER BY capture_time DESC, id DESC
+        LIMIT :limit
+        """,
+    )
+    abstract suspend fun pendingBacklog(
+        includeVideos: Boolean,
+        beforeCapture: Long,
+        beforeId: Long,
+        limit: Int,
+    ): List<MediaItemEntity>
+
     @Query(
         """
         SELECT COUNT(*) FROM media_items

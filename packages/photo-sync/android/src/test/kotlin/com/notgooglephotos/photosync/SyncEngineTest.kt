@@ -18,6 +18,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import java.security.MessageDigest
 
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34])
@@ -244,12 +245,17 @@ class SyncEngineTest {
         fx.store.firstBackupComplete = false
         fx.store.backlogCutoffMs = fx.clock.nowMs
         val cutoff = fx.clock.nowMs / 1000
+        val knownBytes = "already-on-server".toByteArray()
+        fx.server.remember(sha1(knownBytes))
+        fx.add("known.jpg", bytes = knownBytes, dateAdded = cutoff - 200, captureTime = 0)
         fx.add("old.jpg", dateAdded = cutoff - 100, captureTime = 1)
         fx.add("new.jpg", dateAdded = cutoff + 100, captureTime = 2)
         val normal = fx.run(RunTrigger.INTERVAL)
         assertEquals(1, normal.uploaded)
-        assertEquals("new.jpg", fx.server.uploads.single().fileName)
+        assertEquals(1, normal.alreadyOnServer)
+        assertEquals(listOf("new.jpg"), fx.server.uploads.map { it.fileName })
         assertTrue(fx.follow.events.contains("firstBackup"))
+        assertEquals(ItemState.BACKED_UP, fx.rows().first { it.displayName == "known.jpg" }.state)
         assertEquals(ItemState.PENDING, fx.rows().first { it.displayName == "old.jpg" }.state)
 
         fx.conditions.charging = false
@@ -260,8 +266,23 @@ class SyncEngineTest {
         fx.conditions.charging = true
         val full = fx.run(RunTrigger.FIRST_BACKUP)
         assertEquals(1, full.uploaded)
+        assertEquals("old.jpg", fx.server.uploads.last().fileName)
         assertTrue(fx.store.firstBackupComplete)
         assertTrue(fx.rows().all { it.state == ItemState.BACKED_UP })
+    }
+
+    @Test
+    fun backUpNowUploadsOlderPhotosTheServerDoesNotHave() {
+        fx.store.firstBackupComplete = false
+        fx.store.backlogCutoffMs = fx.clock.nowMs
+        val cutoff = fx.clock.nowMs / 1000
+        fx.conditions.charging = false
+        fx.add("old.jpg", dateAdded = cutoff - 100, captureTime = 1)
+        val report = fx.run(RunTrigger.MANUAL)
+        assertEquals(RunOutcome.COMPLETED, report.outcome)
+        assertEquals(1, report.uploaded)
+        assertEquals("old.jpg", fx.server.uploads.single().fileName)
+        assertTrue(fx.store.firstBackupComplete)
     }
 
     @Test
@@ -356,4 +377,7 @@ class SyncEngineTest {
         assertEquals("completed", run.outcome)
         assertEquals("manual", run.trigger)
     }
+
+    private fun sha1(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }
 }

@@ -232,6 +232,11 @@ class FakeSyncServer {
 
     fun assetId(checksum: String): String = "asset-${checksum.take(12)}"
 
+    /** Pretend this checksum was uploaded in an earlier install. */
+    fun remember(checksum: String) {
+        known[checksum] = assetId(checksum)
+    }
+
     private fun handle(request: RecordedRequest): MockResponse {
         val path = request.path ?: ""
         if (path.endsWith("/api/health")) {

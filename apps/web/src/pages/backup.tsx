@@ -167,6 +167,7 @@ function PhoneBackup() {
       {status?.configured ? (
         <DeleteBackedUpCard
           backedUp={status.counts.backedUp}
+          pending={status.counts.pending}
           disabled={busy !== null}
           onFinished={() => {
             void queryClient.invalidateQueries({ queryKey: ['backup'] });
@@ -208,8 +209,8 @@ function PhoneBackup() {
         <CardHeader>
           <CardTitle>Run</CardTitle>
           <CardDescription>
-            New photos wait about a minute, then an hourly pass runs. The first full backup waits
-            for Wi-Fi and charging.
+            New photos wait about a minute, then an hourly pass runs. Older photos wait for Wi-Fi
+            and charging before new uploads. Back up now checks them against the server immediately.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -294,7 +295,12 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 function describe(status: SyncStatus): string {
-  const waiting = status.waitingFor ? `Waiting for ${WAITING[status.waitingFor]}. ` : '';
+  const waiting =
+    status.waitingFor === 'firstBackup'
+      ? 'Older photos wait for Wi-Fi and charging before new uploads. Back up now checks them against the server immediately. Refresh only reloads these numbers. '
+      : status.waitingFor
+        ? `Waiting for ${WAITING[status.waitingFor]}. `
+        : '';
   const phase = PHASE[status.phase];
   const paired = status.configured ? 'Paired with a server.' : 'No server paired yet.';
   const first = status.firstBackup.complete
