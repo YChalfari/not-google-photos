@@ -32,7 +32,7 @@ import java.time.LocalTime
  * - interval: periodic work (15 minutes at the shortest).
  * - times of day: one-off work for the next listed time, re-armed after each run.
  * - reconcile: the daily safety net (a full rescan).
- * - first backup: Wi-Fi and charging, run as a foreground worker.
+ * - first backup: unmetered Wi-Fi, and charging unless the phone is allowed to back up on battery.
  * - when on Wi-Fi / online / charging, and the backoff retry: the "next natural moment" wake-ups.
  * - reminder: the end-of-day check.
  */
@@ -132,10 +132,20 @@ class SyncScheduler(
     }
 
     override fun ensureFirstBackup() {
+        val charging = store.settings.requireCharging
+        val spec = if (charging) "unmetered+charging" else "unmetered"
         val request = syncRequest(RunTrigger.FIRST_BACKUP) {
-            setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).setRequiresCharging(true).build())
+            val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED)
+            if (charging) constraints.setRequiresCharging(true)
+            setConstraints(constraints.build())
         }
-        wake(FIRST_BACKUP, request)
+        // Replacing this work from inside its own worker would cancel the run that is re-arming it.
+        if (isRunning(FIRST_BACKUP)) {
+            wake(FIRST_BACKUP, request)
+            store.setWorkSpec(FIRST_BACKUP, spec)
+        } else {
+            oneTime(FIRST_BACKUP, spec, request)
+        }
     }
 
     /**

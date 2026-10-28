@@ -158,7 +158,12 @@ export interface SyncSettings {
   includeVideos?: boolean;
   /** Only back up on Wi-Fi (unmetered networks). Default true. */
   wifiOnly?: boolean;
-  /** Only upload videos while the phone is charging. Default true. */
+  /**
+   * Wait until the phone is plugged in before the first full backup and before videos.
+   * Default true. When false, those uploads run on Wi-Fi without a charger.
+   */
+  requireCharging?: boolean;
+  /** Only upload videos while the phone is charging. Default true. Ignored when `requireCharging` is false. */
   videosOnlyWhileCharging?: boolean;
   /** End-of-day reminder time, 24-hour "HH:mm". Default "21:00". `null` turns the reminder off. */
   reminderTime?: string | null;
@@ -177,6 +182,7 @@ export interface StoredSyncSettings {
   folders: FolderId[];
   includeVideos: boolean;
   wifiOnly: boolean;
+  requireCharging: boolean;
   videosOnlyWhileCharging: boolean;
   reminderTime: string | null;
   unreachableNudgeDays: number;
@@ -307,7 +313,7 @@ export interface SyncStatus {
   lastServerContactAt: number | null;
   firstBackup: {
     complete: boolean;
-    /** Items from before setup still waiting for the first full backup (Wi-Fi and charging). */
+    /** Items from before setup still waiting for the first full backup. */
     remaining: number;
   };
   /** Epoch ms when items that failed mid-upload will be tried again, or null. */

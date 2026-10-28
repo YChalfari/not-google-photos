@@ -160,7 +160,7 @@ class SyncEngine(
                 followUps.whenOnline(unmetered = true)
                 return RunOutcome.WAITING_FOR_WIFI
             }
-            if (trigger == RunTrigger.FIRST_BACKUP && !conditions.isCharging()) {
+            if (trigger == RunTrigger.FIRST_BACKUP && settings.requireCharging && !conditions.isCharging()) {
                 followUps.ensureFirstBackup()
                 message = "The first full backup runs while the phone is charging"
                 return RunOutcome.WAITING_FOR_CHARGING
@@ -291,11 +291,12 @@ class SyncEngine(
             return CheckedPage(ReadyPage(byChecksum, check.missing, marked), null)
         }
 
-        private fun videosAllowedNow(settings: SyncSettings) = !settings.videosOnlyWhileCharging || conditions.isCharging()
+        private fun videosAllowedNow(settings: SyncSettings) =
+            conditions.isCharging() || !settings.requireCharging || !settings.videosOnlyWhileCharging
 
         /** Videos that are ready except for the charging condition get a one-off wake-up for when power is connected. */
         private suspend fun videosWaitingForPower(settings: SyncSettings) {
-            if (!settings.includeVideos || !settings.videosOnlyWhileCharging || conditions.isCharging()) return
+            if (!settings.includeVideos || !settings.requireCharging || !settings.videosOnlyWhileCharging || conditions.isCharging()) return
             val waiting = db.media().pendingBreakdown().any { it.kind == MediaKind.VIDEO && !it.backlog && it.count > 0 }
             if (waiting) followUps.whenCharging()
         }

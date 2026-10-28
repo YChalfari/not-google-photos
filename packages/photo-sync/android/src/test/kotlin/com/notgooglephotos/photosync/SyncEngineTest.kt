@@ -286,6 +286,23 @@ class SyncEngineTest {
     }
 
     @Test
+    fun firstBackupRunsUnpluggedWhenChargingIsNotRequired() {
+        fx.store.firstBackupComplete = false
+        fx.store.backlogCutoffMs = fx.clock.nowMs
+        fx.store.settings = fx.store.settings.copy(requireCharging = false)
+        val cutoff = fx.clock.nowMs / 1000
+        fx.conditions.charging = false
+        fx.add("old.jpg", dateAdded = cutoff - 100, captureTime = 2)
+        fx.add("old.mp4", bytes = "video".toByteArray(), kind = MediaKind.VIDEO, dateAdded = cutoff - 50, captureTime = 1)
+        val report = fx.run(RunTrigger.FIRST_BACKUP)
+        assertEquals(RunOutcome.COMPLETED, report.outcome)
+        assertEquals(2, report.uploaded)
+        assertEquals(setOf("old.jpg", "old.mp4"), fx.server.uploads.map { it.fileName }.toSet())
+        assertTrue(fx.store.firstBackupComplete)
+        assertTrue(fx.rows().all { it.state == ItemState.BACKED_UP })
+    }
+
+    @Test
     fun videosWaitUntilThePhoneIsCharging() {
         fx.conditions.charging = false
         fx.add("still.jpg", captureTime = 2)

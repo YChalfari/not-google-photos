@@ -54,6 +54,10 @@ function PhoneBackup() {
     queryKey: ['backup', 'status'],
     queryFn: () => PhotoSync.getStatus(),
   });
+  const settingsQuery = useQuery({
+    queryKey: ['backup', 'settings'],
+    queryFn: () => PhotoSync.getSettings(),
+  });
   const permissionsQuery = useQuery({
     queryKey: ['backup', 'permissions'],
     queryFn: () => PhotoSync.checkPermissions(),
@@ -64,6 +68,7 @@ function PhoneBackup() {
   const [busy, setBusy] = useState<string | null>(null);
   const status = statusQuery.data ?? null;
   const permissions = permissionsQuery.data ?? null;
+  const requireCharging = settingsQuery.data?.settings.requireCharging ?? true;
 
   useEffect(() => {
     let cancelled = false;
@@ -118,7 +123,7 @@ function PhoneBackup() {
     setFolders(listed.folders);
   }
 
-  const detail = status ? describe(status) : '';
+  const detail = status ? describe(status, requireCharging) : '';
 
   return (
     <Page
@@ -209,11 +214,31 @@ function PhoneBackup() {
         <CardHeader>
           <CardTitle>Run</CardTitle>
           <CardDescription>
-            New photos wait about a minute, then an hourly pass runs. Older photos wait for Wi-Fi
-            and charging before new uploads. Back up now checks them against the server immediately.
+            New photos wait about a minute, then an hourly pass runs. {olderPhotoWait(requireCharging)}{' '}
+            Back up now checks them against the server immediately.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-primary"
+              checked={!requireCharging}
+              disabled={busy !== null || !settingsQuery.data}
+              onChange={(event) =>
+                void run('charging', () =>
+                  PhotoSync.configure({ requireCharging: !event.target.checked }),
+                )
+              }
+            />
+            <span>
+              Back up even when this phone isn&apos;t plugged in
+              <span className="mt-1 block text-muted-foreground">
+                Older photos and videos then upload on Wi-Fi without waiting to charge. This uses
+                more battery.
+              </span>
+            </span>
+          </label>
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -278,7 +303,7 @@ function PhoneBackup() {
           <p className="text-xs text-muted-foreground">
             A checked folder covers its subfolders. At least one folder stays selected.
           </p>
-          <FormError error={error ?? statusQuery.error ?? permissionsQuery.error} />
+          <FormError error={error ?? statusQuery.error ?? settingsQuery.error ?? permissionsQuery.error} />
         </CardContent>
       </Card>
     </Page>
@@ -294,10 +319,16 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function describe(status: SyncStatus): string {
+function olderPhotoWait(requireCharging: boolean): string {
+  return requireCharging
+    ? 'Older photos wait for Wi-Fi and charging before new uploads.'
+    : 'Older photos upload on Wi-Fi even when this phone is not plugged in.';
+}
+
+function describe(status: SyncStatus, requireCharging: boolean): string {
   const waiting =
     status.waitingFor === 'firstBackup'
-      ? 'Older photos wait for Wi-Fi and charging before new uploads. Back up now checks them against the server immediately. Refresh only reloads these numbers. '
+      ? `${olderPhotoWait(requireCharging)} Back up now checks them against the server immediately. Refresh only reloads these numbers. `
       : status.waitingFor
         ? `Waiting for ${WAITING[status.waitingFor]}. `
         : '';

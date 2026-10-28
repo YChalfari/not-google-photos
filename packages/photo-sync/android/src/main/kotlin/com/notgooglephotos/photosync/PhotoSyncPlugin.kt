@@ -522,6 +522,7 @@ class PhotoSyncPlugin : Plugin() {
             .put("folders", JSONArray(settings.folders))
             .put("includeVideos", settings.includeVideos)
             .put("wifiOnly", settings.wifiOnly)
+            .put("requireCharging", settings.requireCharging)
             .put("videosOnlyWhileCharging", settings.videosOnlyWhileCharging)
             .put("reminderTime", settings.reminderTime?.let(TimeOfDay::format) ?: JSONObject.NULL)
             .put("unreachableNudgeDays", settings.unreachableNudgeDays)

@@ -93,7 +93,7 @@ class EndOfDayReminder(
         RunOutcome.NEEDS_PAIRING -> ReminderCause.PAIRING
         RunOutcome.NO_PERMISSION -> ReminderCause.PERMISSION
         else -> when {
-            counts.photos == 0 && store.settings.videosOnlyWhileCharging && !conditions.isCharging() -> ReminderCause.CHARGING
+            counts.photos == 0 && store.settings.requireCharging && store.settings.videosOnlyWhileCharging && !conditions.isCharging() -> ReminderCause.CHARGING
             !store.firstBackupComplete -> ReminderCause.FIRST_BACKUP
             else -> ReminderCause.OTHER
         }

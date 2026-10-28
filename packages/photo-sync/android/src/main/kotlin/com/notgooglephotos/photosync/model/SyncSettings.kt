@@ -13,6 +13,8 @@ data class SyncSettings(
     val folders: List<String> = DEFAULT_FOLDERS,
     val includeVideos: Boolean = true,
     val wifiOnly: Boolean = true,
+    /** First backup and videos wait until the phone is plugged in. */
+    val requireCharging: Boolean = true,
     val videosOnlyWhileCharging: Boolean = true,
     val reminderTime: LocalTime? = DEFAULT_REMINDER_TIME,
     val unreachableNudgeDays: Int = 3,
@@ -30,6 +32,7 @@ data class SyncSettings(
         .put("folders", JSONArray(folders))
         .put("includeVideos", includeVideos)
         .put("wifiOnly", wifiOnly)
+        .put("requireCharging", requireCharging)
         .put("videosOnlyWhileCharging", videosOnlyWhileCharging)
         .put("reminderTime", reminderTime?.let(TimeOfDay::format) ?: JSONObject.NULL)
         .put("unreachableNudgeDays", unreachableNudgeDays)
@@ -44,6 +47,7 @@ data class SyncSettings(
         if (patch.has("folders")) next = next.copy(folders = normalizeFolders(patch.getJSONArray("folders").strings()))
         if (patch.has("includeVideos")) next = next.copy(includeVideos = patch.getBoolean("includeVideos"))
         if (patch.has("wifiOnly")) next = next.copy(wifiOnly = patch.getBoolean("wifiOnly"))
+        if (patch.has("requireCharging")) next = next.copy(requireCharging = patch.getBoolean("requireCharging"))
         if (patch.has("videosOnlyWhileCharging")) {
             next = next.copy(videosOnlyWhileCharging = patch.getBoolean("videosOnlyWhileCharging"))
         }
@@ -68,6 +72,7 @@ data class SyncSettings(
             folders = json.optJSONArray("folders")?.strings()?.let(::normalizeFolders) ?: DEFAULT_FOLDERS,
             includeVideos = json.optBoolean("includeVideos", true),
             wifiOnly = json.optBoolean("wifiOnly", true),
+            requireCharging = json.optBoolean("requireCharging", true),
             videosOnlyWhileCharging = json.optBoolean("videosOnlyWhileCharging", true),
             reminderTime = if (json.has("reminderTime")) json.optStringOrNull("reminderTime")?.let(TimeOfDay::parse) else DEFAULT_REMINDER_TIME,
             unreachableNudgeDays = json.optInt("unreachableNudgeDays", 3),

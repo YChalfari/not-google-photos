@@ -108,7 +108,7 @@ class StatusProvider(
         val network = conditions.network()
         if (pending > 0 && settings.wifiOnly && !network.unmetered) return "wifi"
         if (pending > 0 && !network.connected) return "network"
-        if (pending > 0 && settings.includeVideos && settings.videosOnlyWhileCharging && !conditions.isCharging()) {
+        if (pending > 0 && settings.requireCharging && settings.includeVideos && settings.videosOnlyWhileCharging && !conditions.isCharging()) {
             val breakdown = db.media().pendingBreakdown()
             val photos = breakdown.filter { it.kind == MediaKind.IMAGE }.sumOf { it.count }
             val videos = breakdown.filter { it.kind == MediaKind.VIDEO && !it.backlog }.sumOf { it.count }

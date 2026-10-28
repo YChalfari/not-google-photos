@@ -89,6 +89,20 @@ class SyncSchedulerTest {
     }
 
     @Test
+    fun firstBackupDropsTheChargingConstraintWhenAllowed() {
+        fx.start()
+        fx.store.firstBackupComplete = false
+        scheduler.apply()
+        assertTrue(pending(SyncScheduler.FIRST_BACKUP).single().constraints.requiresCharging())
+
+        fx.store.settings = fx.store.settings.copy(requireCharging = false)
+        scheduler.apply()
+        val job = pending(SyncScheduler.FIRST_BACKUP).single()
+        assertTrue(!job.constraints.requiresCharging())
+        assertEquals(androidx.work.NetworkType.UNMETERED, job.constraints.requiredNetworkType)
+    }
+
+    @Test
     fun oneWakeUpPerKindAndAFailedRunIsNotRetried() {
         fx.start()
         fx.store.firstBackupComplete = true
