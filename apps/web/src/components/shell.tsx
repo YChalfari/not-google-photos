@@ -1,9 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudUpload, FolderHeart, Images, Search, Settings, Shield, Users } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useStatus } from '@/lib/status';
+import { ThemeSwitch } from '@/components/theme-switch';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api';
+import { api, errorMessage } from '@/lib/api';
 import { unpairThisPhone } from '@/lib/device';
 import { isNativeApp, usesDeviceAuth } from '@/lib/native';
 import { cn } from '@/lib/utils';
@@ -23,18 +25,26 @@ export function Shell() {
   const admin = me?.user.role === 'admin';
   const onPhone = isNativeApp();
   const deviceAuth = usesDeviceAuth();
+  const announce = useStatus();
+  const [leaving, setLeaving] = useState(false);
 
   async function logout() {
-    if (deviceAuth) {
-      await unpairThisPhone();
-      queryClient.setQueryData(['device', 'connection'], false);
+    setLeaving(true);
+    try {
+      if (deviceAuth) {
+        await unpairThisPhone();
+        queryClient.setQueryData(['device', 'connection'], false);
+        await refresh();
+        void navigate('/connect');
+        return;
+      }
+      await api('auth.logout');
       await refresh();
-      void navigate('/connect');
-      return;
+      void navigate('/login');
+    } catch (error) {
+      setLeaving(false);
+      announce(errorMessage(error));
     }
-    await api('auth.logout');
-    await refresh();
-    void navigate('/login');
   }
 
   return (
@@ -48,15 +58,21 @@ export function Shell() {
             ))}
           </nav>
           <div className="flex flex-col gap-1 border-t border-border pt-4">
-            {onPhone ? <SideLink to="/backup" label="Backup" icon={CloudUpload} end={false} /> : null}
+            {onPhone ? (
+              <SideLink to="/backup" label="Backup" icon={CloudUpload} end={false} />
+            ) : null}
             <SideLink to="/settings" label="Settings" icon={Settings} end={false} />
             {admin ? <SideLink to="/admin" label="Admin" icon={Shield} end={false} /> : null}
+            <div className="mt-2">
+              <ThemeSwitch />
+            </div>
             <button
               type="button"
-              className="mt-2 rounded-md px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent"
+              disabled={leaving}
+              className="rounded-md px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent active:bg-secondary disabled:opacity-50"
               onClick={() => void logout()}
             >
-              {deviceAuth ? 'Unpair this phone' : 'Sign out'}
+              {leaving ? 'Signing out…' : deviceAuth ? 'Unpair this phone' : 'Sign out'}
             </button>
           </div>
         </div>
@@ -80,6 +96,7 @@ export function Shell() {
                 </NavLink>
               </Button>
             ) : null}
+            <ThemeSwitch />
             <Button variant="ghost" size="icon" asChild>
               <NavLink to="/settings" aria-label="Settings">
                 <Settings />
@@ -103,7 +120,7 @@ export function Shell() {
 function Brand({ name }: { name: string | undefined }) {
   return (
     <div className="flex items-center gap-3 px-1">
-      {/* TODO: Replace this mark with a real logo, and add a dark theme that follows the phone setting. */}
+      {/* TODO: Replace this mark with a real logo. */}
       <span className="grid size-9 place-items-center rounded-lg bg-primary font-serif text-sm text-primary-foreground">
         ng
       </span>

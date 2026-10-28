@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { thumbHashToDataURL } from 'thumbhash';
 import { FaceAvatar } from '@/components/face-avatar';
+import { useStatus } from '@/lib/status';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useAssetBatch } from '@/lib/asset-batch';
 import { api, errorMessage } from '@/lib/api';
 import { assetUrl } from '@/lib/native';
 import { formatBytes, formatWhen } from '@/lib/format';
@@ -43,7 +45,6 @@ export function AssetDialog({
   onClose: () => void;
   onNeighbor: (id: string) => void;
 }) {
-  const queryClient = useQueryClient();
   const [selection, setSelection] = useState<{ assetId: string; faceId: string } | null>(null);
   const [menuAssetId, setMenuAssetId] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState(assetId);
@@ -62,14 +63,10 @@ export function AssetDialog({
   const nextId = index >= 0 && index < ids.length - 1 ? (ids[index + 1] ?? null) : null;
   const menuOpen = assetId !== null && menuAssetId === assetId;
 
-  const update = useMutation({
-    mutationFn: (body: { isFavorite?: boolean; isArchived?: boolean; isTrashed?: boolean }) =>
-      api('assets.update', { body: { ids: [assetId!], ...body } }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['asset', assetId] });
-      await queryClient.invalidateQueries({ queryKey: ['timeline'] });
-    },
-  });
+  const update = useAssetBatch();
+  const savingFavorite = update.isPending && update.variables?.isFavorite !== undefined;
+  const savingArchive = update.isPending && update.variables?.isArchived !== undefined;
+  const savingTrash = update.isPending && update.variables?.isTrashed !== undefined;
 
   function showNeighbor(id: string | null) {
     if (id) onNeighbor(id);
@@ -80,7 +77,8 @@ export function AssetDialog({
     const onKey = (event: KeyboardEvent) => {
       const target = event.target;
       if (target instanceof HTMLElement && target.closest('input, textarea, select')) return;
-      const id = event.key === 'ArrowLeft' ? previousId : event.key === 'ArrowRight' ? nextId : null;
+      const id =
+        event.key === 'ArrowLeft' ? previousId : event.key === 'ArrowRight' ? nextId : null;
       if (!id) return;
       event.preventDefault();
       onNeighbor(id);
@@ -115,7 +113,9 @@ export function AssetDialog({
         >
           {detail.isPending ? <div className="h-full w-full animate-pulse bg-white/5" /> : null}
           {detail.isError ? (
-            <p className="px-6 text-center text-sm text-white/80">This photo could not be opened.</p>
+            <p className="px-6 text-center text-sm text-white/80">
+              This photo could not be opened.
+            </p>
           ) : null}
           {asset?.type === 'video' ? (
             <video
@@ -236,35 +236,48 @@ export function AssetDialog({
                 <Button
                   variant={asset.isFavorite ? 'default' : 'outline'}
                   size="sm"
+                  pending={savingFavorite}
                   disabled={update.isPending}
-                  onClick={() => update.mutate({ isFavorite: !asset.isFavorite })}
+                  onClick={() => update.mutate({ ids: [asset.id], isFavorite: !asset.isFavorite })}
                 >
                   <Heart />
-                  {asset.isFavorite ? 'Favorited' : 'Favorite'}
+                  {savingFavorite ? 'Saving…' : asset.isFavorite ? 'Favorited' : 'Favorite'}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
+                  pending={savingArchive}
                   disabled={update.isPending}
-                  onClick={() => update.mutate({ isArchived: !asset.isArchived })}
+                  onClick={() => update.mutate({ ids: [asset.id], isArchived: !asset.isArchived })}
                 >
-                  {asset.isArchived ? 'Unarchive' : 'Archive'}
+                  {savingArchive ? 'Saving…' : asset.isArchived ? 'Unarchive' : 'Archive'}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
+                  pending={savingTrash}
                   disabled={update.isPending}
                   onClick={() => {
+                    const trashing = asset.trashedAt === null;
                     update.mutate(
-                      { isTrashed: asset.trashedAt === null },
-                      { onSuccess: () => onClose() },
+                      { ids: [asset.id], isTrashed: trashing },
+                      {
+                        onSuccess: () => {
+                          if (trashing) onClose();
+                        },
+                      },
                     );
                   }}
                 >
                   <Trash2 />
-                  {asset.trashedAt ? 'Restore' : 'Trash'}
+                  {savingTrash ? 'Saving…' : asset.trashedAt ? 'Restore' : 'Trash'}
                 </Button>
               </div>
+              {update.isError ? (
+                <p className="mt-2 text-sm text-destructive" role="alert">
+                  {errorMessage(update.error)}
+                </p>
+              ) : null}
               {asset.originalUrl ? (
                 <a
                   className="mt-3 inline-block text-sm text-primary underline-offset-4 hover:underline"
@@ -421,6 +434,7 @@ function FaceEditor({
   onSelect: (faceId: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const announce = useStatus();
   const people = useQuery({
     queryKey: ['people'],
     queryFn: () => api('people.list'),
@@ -448,6 +462,7 @@ function FaceEditor({
       }),
     onSuccess: async () => {
       setNameDraft(null);
+      announce('Saved');
       await refresh();
     },
   });
@@ -456,6 +471,7 @@ function FaceEditor({
       api('faces.update', { params: { id: selected.id }, body: { personId: nextPersonId } }),
     onSuccess: async () => {
       setMoveTarget(null);
+      announce('Moved this face');
       await refresh();
     },
   });
@@ -463,6 +479,7 @@ function FaceEditor({
     mutationFn: () =>
       api('faces.update', { params: { id: selected.id }, body: { createPerson: true } }),
     onSuccess: async () => {
+      announce('New person');
       await refresh();
     },
   });
@@ -470,6 +487,7 @@ function FaceEditor({
     mutationFn: () =>
       api('faces.notThisPerson', { params: { id: selected.id }, body: { personId: personId! } }),
     onSuccess: async () => {
+      announce('Removed from this person');
       await refresh();
     },
   });
@@ -544,8 +562,8 @@ function FaceEditor({
             placeholder="Name"
             onChange={(event) => setNameDraft({ personId, value: event.target.value })}
           />
-          <Button type="submit" disabled={busy}>
-            Save name
+          <Button type="submit" pending={rename.isPending} disabled={busy}>
+            {rename.isPending ? 'Saving…' : 'Save name'}
           </Button>
         </form>
       ) : null}
@@ -603,10 +621,11 @@ function FaceEditor({
           type="button"
           variant="outline"
           size="sm"
+          pending={move.isPending}
           disabled={!moveId || busy}
           onClick={() => move.mutate(moveId)}
         >
-          Move this face
+          {move.isPending ? 'Moving…' : 'Move this face'}
         </Button>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -615,20 +634,22 @@ function FaceEditor({
             type="button"
             variant="outline"
             size="sm"
+            pending={reject.isPending}
             disabled={busy}
             onClick={() => reject.mutate()}
           >
-            Not this person
+            {reject.isPending ? 'Removing…' : 'Not this person'}
           </Button>
         ) : null}
         <Button
           type="button"
           variant="outline"
           size="sm"
+          pending={createPerson.isPending}
           disabled={busy}
           onClick={() => createPerson.mutate()}
         >
-          New person
+          {createPerson.isPending ? 'Creating…' : 'New person'}
         </Button>
       </div>
       {faceError ? <p className="text-sm text-destructive">{errorMessage(faceError)}</p> : null}

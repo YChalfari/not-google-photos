@@ -46,7 +46,12 @@ const id = () => uuid('id').primaryKey().defaultRandom();
 export const userRole = pgEnum('user_role', ['admin', 'member']);
 export const devicePlatform = pgEnum('device_platform', ['android', 'ios', 'web', 'other']);
 export const assetType = pgEnum('asset_type', ['image', 'video']);
-export const processingState = pgEnum('processing_state', ['pending', 'processing', 'ready', 'failed']);
+export const processingState = pgEnum('processing_state', [
+  'pending',
+  'processing',
+  'ready',
+  'failed',
+]);
 export const assetFileKind = pgEnum('asset_file_kind', ['thumbnail', 'preview', 'playback']);
 export const tagSource = pgEnum('tag_source', ['clip', 'rule', 'manual']);
 export const albumMemberRole = pgEnum('album_member_role', ['viewer', 'contributor']);
@@ -111,7 +116,10 @@ export const sessions = pgTable(
     lastSeenAt: timestamp('last_seen_at', tz).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', tz).notNull(),
   },
-  (t) => [index('sessions_user_id_idx').on(t.userId), index('sessions_expires_at_idx').on(t.expiresAt)],
+  (t) => [
+    index('sessions_user_id_idx').on(t.userId),
+    index('sessions_expires_at_idx').on(t.expiresAt),
+  ],
 );
 
 export const invites = pgTable(
@@ -195,7 +203,9 @@ export const files = pgTable(
   },
   (t) => [
     index('files_sha1_idx').on(t.sha1),
-    index('files_unreferenced_idx').on(t.createdAt).where(sql`${t.refCount} = 0`),
+    index('files_unreferenced_idx')
+      .on(t.createdAt)
+      .where(sql`${t.refCount} = 0`),
     check('files_ref_count_nonnegative', sql`${t.refCount} >= 0`),
     check('files_sha256_hex', sql`${t.sha256} ~ '^[0-9a-f]{64}$'`),
     check('files_sha1_hex', sql`${t.sha1} ~ '^[0-9a-f]{40}$'`),
@@ -272,7 +282,9 @@ export const assets = pgTable(
     index('assets_owner_local_date_idx').on(t.ownerId, t.localDate),
     index('assets_file_id_idx').on(t.fileId),
     index('assets_version_of_idx').on(t.versionOfId),
-    index('assets_trashed_idx').on(t.trashedAt).where(sql`${t.trashedAt} is not null`),
+    index('assets_trashed_idx')
+      .on(t.trashedAt)
+      .where(sql`${t.trashedAt} is not null`),
     check('assets_checksum_sha1_hex', sql`${t.checksumSha1} ~ '^[0-9a-f]{40}$'`),
   ],
 );
@@ -311,7 +323,9 @@ export const assetEmbeddings = pgTable(
     embedding: vector('embedding', { dimensions: CLIP_EMBEDDING_DIMENSIONS }).notNull(),
     createdAt: createdAt(),
   },
-  (t) => [index('asset_embeddings_embedding_idx').using('hnsw', t.embedding.op('vector_cosine_ops'))],
+  (t) => [
+    index('asset_embeddings_embedding_idx').using('hnsw', t.embedding.op('vector_cosine_ops')),
+  ],
 );
 
 // ---------------------------------------------------------------------------------------------
@@ -335,7 +349,10 @@ export const people = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index('people_owner_idx').on(t.ownerId), unique('people_id_owner_key').on(t.id, t.ownerId)],
+  (t) => [
+    index('people_owner_idx').on(t.ownerId),
+    unique('people_id_owner_key').on(t.id, t.ownerId),
+  ],
 );
 
 export const faces = pgTable(
@@ -469,7 +486,10 @@ export const albumMembers = pgTable(
     /** `null` while the invitation is pending; pending members can't see the photos. */
     acceptedAt: timestamp('accepted_at', tz),
   },
-  (t) => [primaryKey({ columns: [t.albumId, t.userId] }), index('album_members_user_idx').on(t.userId)],
+  (t) => [
+    primaryKey({ columns: [t.albumId, t.userId] }),
+    index('album_members_user_idx').on(t.userId),
+  ],
 );
 
 /** Each member links their own person to a live album, optionally from a start date. */
@@ -513,7 +533,10 @@ export const albumAssets = pgTable(
     ruleId: uuid('rule_id').references(() => albumRules.id, { onDelete: 'set null' }),
     addedAt: timestamp('added_at', tz).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.albumId, t.assetId] }), index('album_assets_asset_idx').on(t.assetId)],
+  (t) => [
+    primaryKey({ columns: [t.albumId, t.assetId] }),
+    index('album_assets_asset_idx').on(t.assetId),
+  ],
 );
 
 // ---------------------------------------------------------------------------------------------
@@ -552,7 +575,10 @@ export const memoryAssets = pgTable(
       .references(() => assets.id, { onDelete: 'cascade' }),
     position: integer('position').notNull(),
   },
-  (t) => [primaryKey({ columns: [t.memoryId, t.assetId] }), index('memory_assets_asset_idx').on(t.assetId)],
+  (t) => [
+    primaryKey({ columns: [t.memoryId, t.assetId] }),
+    index('memory_assets_asset_idx').on(t.assetId),
+  ],
 );
 
 /** Per account and media type: keep originals, or re-encode with storage saver. */
@@ -580,4 +606,5 @@ export type AssetFileRow = typeof assetFiles.$inferSelect;
 export type PersonRow = typeof people.$inferSelect;
 export type FaceRow = typeof faces.$inferSelect;
 export type AlbumRow = typeof albums.$inferSelect;
+export type MemoryRow = typeof memories.$inferSelect;
 export type ServerConfigRow = typeof serverConfig.$inferSelect;

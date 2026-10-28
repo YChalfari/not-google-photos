@@ -3,6 +3,7 @@ import { PgBoss } from 'pg-boss';
 import type { AppContext } from '../context';
 import { assets } from '../db/schema';
 import { processAsset } from '../media/derivatives';
+import { buildTodaysMemories } from '../memories/on-this-day';
 import { recognizeAsset } from '../recognition/recognize';
 import { cleanupExpired, collectUnreferencedFiles } from './maintenance';
 
@@ -17,6 +18,7 @@ export const QUEUES = {
   derivativesSweep: 'asset.derivatives.sweep',
   recognize: 'asset.recognize',
   recognizeSweep: 'asset.recognize.sweep',
+  memories: 'memories.on-this-day',
 } as const;
 
 export const JOBS_SCHEMA = 'pgboss';
@@ -52,10 +54,12 @@ export async function startJobs(ctx: AppContext): Promise<Jobs> {
   await boss.createQueue(QUEUES.derivativesSweep, { retryLimit: 1, expireInSeconds: 600 });
   await boss.createQueue(QUEUES.recognize, { retryLimit: 8, expireInSeconds: 180, retryDelay: 20 });
   await boss.createQueue(QUEUES.recognizeSweep, { retryLimit: 1, expireInSeconds: 600 });
+  await boss.createQueue(QUEUES.memories, { retryLimit: 2, expireInSeconds: 600 });
   await boss.schedule(QUEUES.cleanup, '17 * * * *');
   await boss.schedule(QUEUES.collectFiles, '30 4 * * *');
   await boss.schedule(QUEUES.derivativesSweep, '*/10 * * * *');
   await boss.schedule(QUEUES.recognizeSweep, '*/2 * * * *');
+  await boss.schedule(QUEUES.memories, '20 6 * * *');
 
   const enqueueAsset = async (assetId: string) => {
     await boss.send(QUEUES.derivatives, { assetId }, { singletonKey: assetId });
@@ -122,11 +126,17 @@ export async function startJobs(ctx: AppContext): Promise<Jobs> {
     const queued = await enqueueUnrecognised();
     if (queued > 0) log.info({ queued }, 'Queued photos that still need people and tags');
   });
+  await boss.work(QUEUES.memories, async () => {
+    const result = await buildTodaysMemories(ctx);
+    log.info(result, 'Built on-this-day memories');
+  });
+  await boss.send(QUEUES.memories, {}, { singletonKey: 'startup' });
 
   const queued = await enqueuePending();
   if (queued > 0) log.info({ queued }, 'Queued photos that still need thumbnails');
   const unrecognised = await enqueueUnrecognised();
-  if (unrecognised > 0) log.info({ queued: unrecognised }, 'Queued photos that still need people and tags');
+  if (unrecognised > 0)
+    log.info({ queued: unrecognised }, 'Queued photos that still need people and tags');
 
   let running = true;
   return {

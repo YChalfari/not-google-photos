@@ -1,10 +1,12 @@
 import type { Handlers } from '../http/contract';
 import { adminHandlers } from './admin';
+import { albumHandlers } from './albums';
 import { assetHandlers } from './assets';
 import { authHandlers } from './auth';
 import { deviceHandlers } from './devices';
 import { inviteHandlers } from './invites';
 import { mediaHandlers } from './media';
+import { memoryHandlers } from './memories';
 import { peopleHandlers } from './people';
 import { searchHandlers } from './search';
 import { serverHandlers } from './server';
@@ -25,4 +27,6 @@ export const handlers: Handlers = {
   ...timelineHandlers,
   ...peopleHandlers,
   ...searchHandlers,
+  ...albumHandlers,
+  ...memoryHandlers,
 };

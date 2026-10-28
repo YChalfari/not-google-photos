@@ -1,18 +1,20 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TimelineScope } from '@ngp/shared';
-import { Heart, ImagePlus, Play } from 'lucide-react';
+import { ImagePlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { thumbHashToDataURL } from 'thumbhash';
+import { AddToAlbumButton } from '@/components/add-to-album';
 import { AssetDialog } from '@/components/asset-dialog';
+import { PhotoGrid } from '@/components/photo-grid';
+import { SelectionBar } from '@/components/selection-bar';
 import { EmptyState, ErrorState, LoadingBlock, Page } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { api, errorMessage } from '@/lib/api';
 import { useAssetParam } from '@/lib/asset-route';
-import { assetUrl } from '@/lib/native';
+import { useAssetBatch } from '@/lib/asset-batch';
 import { formatBytes, formatMonth } from '@/lib/format';
+import { assetUrl } from '@/lib/native';
 import { uploadAsset } from '@/lib/upload';
-import { cn } from '@/lib/utils';
 import { useSession } from '@/session-context';
 
 const SCOPES: Array<{ id: TimelineScope; label: string }> = [
@@ -21,16 +23,6 @@ const SCOPES: Array<{ id: TimelineScope; label: string }> = [
   { id: 'archive', label: 'Archive' },
   { id: 'trash', label: 'Trash' },
 ];
-
-function placeholder(thumbhash: string | null): string | undefined {
-  if (!thumbhash) return undefined;
-  try {
-    const bytes = Uint8Array.from(atob(thumbhash), (char) => char.charCodeAt(0));
-    return thumbHashToDataURL(bytes);
-  } catch {
-    return undefined;
-  }
-}
 
 export function LibraryPage() {
   const { me } = useSession();
@@ -44,14 +36,30 @@ export function LibraryPage() {
   const [uploadLabel, setUploadLabel] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string> | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const batch = useAssetBatch();
 
   const storage = useQuery({ queryKey: ['me', 'storage'], queryFn: () => api('me.storage') });
   const buckets = useQuery({
     queryKey: ['timeline', 'buckets', scope],
     queryFn: () => api('timeline.buckets', { query: { scope, withShared: 'true' } }),
   });
+  const memories = useQuery({
+    queryKey: ['memories', 'today'],
+    queryFn: () => api('memories.list'),
+    enabled: scope === 'library',
+  });
   const swipeIds = useLibrarySwipeIds(scope, buckets.data?.buckets, viewer.assetId);
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelected(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected]);
 
   useEffect(() => {
     if (!refreshing) return;
@@ -103,7 +111,10 @@ export function LibraryPage() {
               key={item.id}
               size="sm"
               variant={scope === item.id ? 'default' : 'ghost'}
-              onClick={() => setParams(item.id === 'library' ? {} : { scope: item.id })}
+              onClick={() => {
+                if (item.id !== scope) setSelected(null);
+                setParams(item.id === 'library' ? {} : { scope: item.id });
+              }}
             >
               {item.label}
             </Button>
@@ -134,12 +145,47 @@ export function LibraryPage() {
             <ImagePlus />
             {uploadLabel ?? 'Add photos'}
           </Button>
+          <Button
+            type="button"
+            variant={selected ? 'default' : 'outline'}
+            onClick={() => setSelected(selected ? null : new Set())}
+          >
+            {selected ? 'Done' : 'Select'}
+          </Button>
         </div>
       </div>
 
       {uploadError ? (
         <ErrorState title="Couldn't add that file" error={new Error(uploadError)} />
       ) : null}
+      {scope === 'library'
+        ? memories.data?.memories
+            .filter((memory) => memory.assetCount > 0)
+            .map((memory) => (
+              <Link
+                key={memory.id}
+                to={`/memories/${memory.id}`}
+                className="flex items-center gap-4 rounded-xl border border-border bg-card p-3 active:brightness-90"
+              >
+                <span className="size-20 shrink-0 overflow-hidden rounded-lg bg-secondary">
+                  {memory.coverUrl ? (
+                    <img
+                      src={assetUrl(memory.coverUrl)}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : null}
+                </span>
+                <span>
+                  <span className="block font-serif text-2xl">{memory.title}</span>
+                  <span className="mt-1 block text-sm text-muted-foreground">
+                    {memory.subtitle ? `${memory.subtitle} · ` : ''}
+                    {memory.assetCount} {memory.assetCount === 1 ? 'photo' : 'photos'}
+                  </span>
+                </span>
+              </Link>
+            ))
+        : null}
       {buckets.isPending ? <LoadingBlock label="Loading your library" /> : null}
       {buckets.isError ? (
         <ErrorState
@@ -171,7 +217,24 @@ export function LibraryPage() {
           monthKey={bucket.key}
           count={bucket.count}
           scope={scope}
+          selecting={selected !== null}
+          selectedIds={selected ?? undefined}
           onOpen={viewer.open}
+          onToggle={(id) =>
+            setSelected((current) => {
+              const next = new Set(current ?? []);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            })
+          }
+          onHold={(id) =>
+            setSelected((current) => {
+              const next = new Set(current ?? []);
+              next.add(id);
+              return next;
+            })
+          }
         />
       ))}
       <AssetDialog
@@ -180,7 +243,78 @@ export function LibraryPage() {
         onClose={viewer.close}
         onNeighbor={viewer.select}
       />
+      {selected ? (
+        <LibrarySelection
+          scope={scope}
+          ids={[...selected]}
+          pending={batch.isPending}
+          onClear={() => setSelected(null)}
+          onFavorite={() => batch.mutate({ ids: [...selected], isFavorite: scope !== 'favorites' })}
+          onArchive={() => batch.mutate({ ids: [...selected], isArchived: scope !== 'archive' })}
+          onTrash={() =>
+            batch.mutate(
+              { ids: [...selected], isTrashed: scope !== 'trash' },
+              { onSuccess: () => setSelected(null) },
+            )
+          }
+        />
+      ) : null}
     </Page>
+  );
+}
+
+function LibrarySelection({
+  scope,
+  ids,
+  pending,
+  onClear,
+  onFavorite,
+  onArchive,
+  onTrash,
+}: {
+  scope: TimelineScope;
+  ids: string[];
+  pending: boolean;
+  onClear: () => void;
+  onFavorite: () => void;
+  onArchive: () => void;
+  onTrash: () => void;
+}) {
+  const empty = ids.length === 0;
+  return (
+    <SelectionBar count={ids.length} onClear={onClear}>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        pending={pending}
+        disabled={empty}
+        onClick={onFavorite}
+      >
+        {scope === 'favorites' ? 'Unfavorite' : 'Favorite'}
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        pending={pending}
+        disabled={empty}
+        onClick={onArchive}
+      >
+        {scope === 'archive' ? 'Unarchive' : 'Archive'}
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        pending={pending}
+        disabled={empty}
+        onClick={onTrash}
+      >
+        {scope === 'trash' ? 'Restore' : 'Trash'}
+      </Button>
+      {scope === 'trash' ? null : <AddToAlbumButton ids={ids} disabled={pending || empty} />}
+    </SelectionBar>
   );
 }
 
@@ -188,12 +322,20 @@ function Month({
   monthKey,
   count,
   scope,
+  selecting,
+  selectedIds,
   onOpen,
+  onToggle,
+  onHold,
 }: {
   monthKey: string;
   count: number;
   scope: TimelineScope;
+  selecting: boolean;
+  selectedIds?: ReadonlySet<string>;
   onOpen: (id: string) => void;
+  onToggle: (id: string) => void;
+  onHold: (id: string) => void;
 }) {
   const ref = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
@@ -232,38 +374,14 @@ function Month({
         />
       ) : null}
       {photos.data ? (
-        <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-6">
-          {photos.data.assets.map((asset) => {
-            const src = assetUrl(asset.thumbnailUrl) ?? placeholder(asset.thumbhash);
-            return (
-              <button
-                key={asset.id}
-                type="button"
-                onClick={() => onOpen(asset.id)}
-                aria-label={asset.localDate ?? (asset.type === 'video' ? 'Video' : 'Photo')}
-                className="group relative aspect-square overflow-hidden rounded-md bg-secondary"
-              >
-                {src ? (
-                  <img src={src} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="flex h-full items-center justify-center text-muted-foreground">
-                    <ImagePlus className="size-5" />
-                  </span>
-                )}
-                {asset.type === 'video' ? (
-                  <Play className="absolute right-1.5 bottom-1.5 size-4 fill-white text-white drop-shadow" />
-                ) : null}
-                {asset.isFavorite ? (
-                  <Heart
-                    className={cn(
-                      'absolute top-1.5 left-1.5 size-4 fill-white text-white drop-shadow',
-                    )}
-                  />
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
+        <PhotoGrid
+          assets={photos.data.assets}
+          selecting={selecting}
+          selectedIds={selectedIds}
+          onOpen={onOpen}
+          onToggle={onToggle}
+          onHold={onHold}
+        />
       ) : null}
     </section>
   );
@@ -278,12 +396,8 @@ function useLibrarySwipeIds(
   const keys = buckets?.map((bucket) => bucket.key) ?? [];
   const loaded = keys.map(
     (key) =>
-      queryClient.getQueryData<{ assets: { id: string }[] }>([
-        'timeline',
-        'month',
-        scope,
-        key,
-      ]) ?? null,
+      queryClient.getQueryData<{ assets: { id: string }[] }>(['timeline', 'month', scope, key]) ??
+      null,
   );
   const bucketIndex = assetId
     ? loaded.findIndex((month) => month?.assets.some((asset) => asset.id === assetId))

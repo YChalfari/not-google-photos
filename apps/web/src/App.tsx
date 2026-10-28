@@ -11,6 +11,7 @@ import { PeoplePage, PersonPage } from '@/pages/people';
 import { SearchPage } from '@/pages/search';
 import { SettingsPage } from '@/pages/settings';
 import { SetupPage } from '@/pages/setup';
+import { AlbumPage, AlbumsPage } from '@/pages/albums';
 import { GuestOnly, RequireAdmin, RequireAuth } from '@/session';
 
 export function App() {
@@ -27,15 +28,8 @@ export function App() {
           <Route path="/" element={<LibraryPage />} />
           <Route path="/people" element={<PeoplePage />} />
           <Route path="/people/:id" element={<PersonPage />} />
-          <Route
-            path="/albums"
-            element={
-              <PlaceholderPage
-                title="Albums"
-                body="Shared albums and live albums will show up here. Membership is already in the database; this screen is the next piece."
-              />
-            }
-          />
+          <Route path="/albums" element={<AlbumsPage />} />
+          <Route path="/albums/:id" element={<AlbumPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/backup" element={<BackupPage />} />

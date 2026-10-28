@@ -24,6 +24,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -31,6 +33,31 @@
 }
 
 :root {
+  color-scheme: dark;
+  --background: #161410;
+  --foreground: #f3efe6;
+  --card: #221f1b;
+  --card-foreground: #f3efe6;
+  --primary: #3d9a6e;
+  --primary-foreground: #f4f7f2;
+  --secondary: #2c2823;
+  --secondary-foreground: #f3efe6;
+  --muted: #2c2823;
+  --muted-foreground: #b7aea0;
+  --accent: #322c24;
+  --accent-foreground: #f3efe6;
+  --destructive: #e07a6a;
+  --destructive-foreground: #fff8f6;
+  --border: #3a342c;
+  --input: #3a342c;
+  --ring: #3d9a6e;
+  --warning: #3a2e1c;
+  --warning-foreground: #f3e1c4;
+  --radius: 0.8rem;
+}
+
+html.light {
+  color-scheme: light;
   --background: #f3efe4;
   --foreground: #1c1915;
   --card: #fffdf8;
@@ -48,7 +75,8 @@
   --border: #ddd4c4;
   --input: #ddd4c4;
   --ring: #1f6b4a;
-  --radius: 0.8rem;
+  --warning: #f3e1c4;
+  --warning-foreground: #6b4a1f;
 }
 
 body {
@@ -56,10 +84,16 @@ body {
   min-height: 100vh;
   background-color: var(--background);
   background-image:
-    radial-gradient(1000px 420px at 0% -10%, rgb(31 107 74 / 0.09), transparent 55%),
-    radial-gradient(800px 360px at 100% 0%, rgb(196 165 116 / 0.22), transparent 50%);
+    radial-gradient(1000px 420px at 0% -10%, rgb(61 154 110 / 0.16), transparent 55%),
+    radial-gradient(800px 360px at 100% 0%, rgb(196 165 116 / 0.1), transparent 50%);
   color: var(--foreground);
   font-family: var(--font-sans);
+}
+
+html.light body {
+  background-image:
+    radial-gradient(1000px 420px at 0% -10%, rgb(31 107 74 / 0.09), transparent 55%),
+    radial-gradient(800px 360px at 100% 0%, rgb(196 165 116 / 0.22), transparent 50%);
 }
 
 #root {

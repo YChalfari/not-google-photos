@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import type { UserRole } from '@ngp/shared';
 import { ErrorState, Field, FormError, LoadingBlock, Page } from '@/components/states';
+import { useStatus } from '@/lib/status';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +15,8 @@ import { formatBytes, formatDate, formatWhen } from '@/lib/format';
 
 export function AdminPage() {
   const queryClient = useQueryClient();
+  const announce = useStatus();
+  const [serverSaved, setServerSaved] = useState(false);
   const users = useQuery({ queryKey: ['admin', 'users'], queryFn: () => api('admin.users.list') });
   const invites = useQuery({ queryKey: ['admin', 'invites'], queryFn: () => api('invites.list') });
   const server = useQuery({
@@ -25,6 +28,8 @@ export function AdminPage() {
     mutationFn: (body: { name?: string; homeUrl?: string | null; remoteUrl?: string | null }) =>
       api('admin.server.update', { body }),
     onSuccess: async () => {
+      setServerSaved(true);
+      announce('Saved');
       await queryClient.invalidateQueries({ queryKey: ['admin', 'server'] });
       await queryClient.invalidateQueries({ queryKey: ['server', 'info'] });
     },
@@ -34,8 +39,12 @@ export function AdminPage() {
       id: string;
       body: { role?: UserRole; disabled?: boolean; quotaBytes?: number | null; name?: string };
     }) => api('admin.users.update', { params: { id: input.id }, body: input.body }),
-    onSuccess: async () => {
+    onSuccess: async (_user, input) => {
       await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      if (input.body.disabled === true) announce('Account disabled');
+      else if (input.body.disabled === false) announce('Account enabled');
+      else if (input.body.role) announce('Role updated');
+      else announce('Saved');
     },
   });
   const createInvite = useMutation({
@@ -45,6 +54,7 @@ export function AdminPage() {
   const revokeInvite = useMutation({
     mutationFn: (id: string) => api('invites.revoke', { params: { id } }),
     onSuccess: async () => {
+      announce('Invite revoked');
       await queryClient.invalidateQueries({ queryKey: ['admin', 'invites'] });
     },
   });
@@ -104,7 +114,11 @@ export function AdminPage() {
             <ErrorState error={server.error} onRetry={() => void server.refetch()} />
           ) : null}
           {server.data ? (
-            <form className="flex flex-col gap-4" onSubmit={onServer}>
+            <form
+              className="flex flex-col gap-4"
+              onInput={() => setServerSaved(false)}
+              onSubmit={onServer}
+            >
               <Field label="Name">
                 <Input name="name" defaultValue={server.data.name} required maxLength={80} />
               </Field>
@@ -129,9 +143,9 @@ export function AdminPage() {
                 />
               </Field>
               <FormError error={saveServer.error} />
-              {saveServer.isSuccess ? <p className="text-sm text-primary">Saved.</p> : null}
-              <Button type="submit" className="self-start" disabled={saveServer.isPending}>
-                Save server
+              {serverSaved ? <p className="text-sm text-primary">Saved.</p> : null}
+              <Button type="submit" className="self-start" pending={saveServer.isPending}>
+                {saveServer.isPending ? 'Saving…' : 'Save server'}
               </Button>
             </form>
           ) : null}
@@ -170,6 +184,11 @@ export function AdminPage() {
                 <Button
                   size="sm"
                   variant="outline"
+                  pending={
+                    updateUser.isPending &&
+                    updateUser.variables?.id === user.id &&
+                    updateUser.variables.body.role !== undefined
+                  }
                   disabled={updateUser.isPending}
                   onClick={() =>
                     updateUser.mutate({
@@ -178,17 +197,32 @@ export function AdminPage() {
                     })
                   }
                 >
-                  Make {user.role === 'admin' ? 'member' : 'admin'}
+                  {updateUser.isPending &&
+                  updateUser.variables?.id === user.id &&
+                  updateUser.variables.body.role !== undefined
+                    ? 'Saving…'
+                    : `Make ${user.role === 'admin' ? 'member' : 'admin'}`}
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
+                  pending={
+                    updateUser.isPending &&
+                    updateUser.variables?.id === user.id &&
+                    updateUser.variables.body.disabled !== undefined
+                  }
                   disabled={updateUser.isPending}
                   onClick={() =>
                     updateUser.mutate({ id: user.id, body: { disabled: user.status === 'active' } })
                   }
                 >
-                  {user.status === 'active' ? 'Disable' : 'Enable'}
+                  {updateUser.isPending &&
+                  updateUser.variables?.id === user.id &&
+                  updateUser.variables.body.disabled !== undefined
+                    ? 'Saving…'
+                    : user.status === 'active'
+                      ? 'Disable'
+                      : 'Enable'}
                 </Button>
                 <QuotaButton
                   used={user.storage.quotaBytes}
@@ -274,10 +308,13 @@ export function AdminPage() {
                   <Button
                     size="sm"
                     variant="outline"
+                    pending={revokeInvite.isPending && revokeInvite.variables === invite.id}
                     disabled={revokeInvite.isPending}
                     onClick={() => revokeInvite.mutate(invite.id)}
                   >
-                    Revoke
+                    {revokeInvite.isPending && revokeInvite.variables === invite.id
+                      ? 'Revoking…'
+                      : 'Revoke'}
                   </Button>
                 ) : null}
               </li>
@@ -364,7 +401,7 @@ function InviteReveal({ url, path }: { url: string; path: string }) {
           alt="Invite QR code"
           width={160}
           height={160}
-          className="rounded-md bg-card"
+          className="rounded-md bg-[#fffdf8] p-2"
         />
       ) : null}
       <div className="min-w-0">

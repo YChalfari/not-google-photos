@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { ErrorState, Field, FormError, LoadingBlock, Page } from '@/components/states';
+import { useStatus } from '@/lib/status';
+import { ThemeSwitch } from '@/components/theme-switch';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,31 +30,44 @@ export function SettingsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const deviceAuth = usesDeviceAuth();
+  const announce = useStatus();
   const [unpairError, setUnpairError] = useState<unknown>(null);
   const [unpairing, setUnpairing] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<unknown>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [passwordSaved, setPasswordSaved] = useState(false);
   const storage = useQuery({ queryKey: ['me', 'storage'], queryFn: () => api('me.storage') });
   const devices = useQuery({ queryKey: ['devices'], queryFn: () => api('devices.list') });
 
   const profile = useMutation({
     mutationFn: (body: { name?: string; email?: string }) => api('me.update', { body }),
     onSuccess: async () => {
+      setProfileSaved(true);
+      announce('Saved');
       await refresh();
     },
   });
   const password = useMutation({
     mutationFn: (body: { currentPassword: string; newPassword: string }) =>
       api('auth.changePassword', { body }),
+    onSuccess: () => {
+      setPasswordSaved(true);
+      announce('Password updated.');
+    },
   });
   const rename = useMutation({
     mutationFn: (input: { id: string; name: string }) =>
       api('devices.update', { params: { id: input.id }, body: { name: input.name } }),
     onSuccess: async () => {
+      announce('Renamed');
       await queryClient.invalidateQueries({ queryKey: ['devices'] });
     },
   });
   const revoke = useMutation({
     mutationFn: (id: string) => api('devices.revoke', { params: { id } }),
     onSuccess: async () => {
+      announce('Phone revoked');
       await queryClient.invalidateQueries({ queryKey: ['devices'] });
     },
   });
@@ -83,13 +98,27 @@ export function SettingsPage() {
     >
       <Card>
         <CardHeader>
+          <CardTitle>Appearance</CardTitle>
+          <CardDescription>Dark is the default. Light stays on this device.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ThemeSwitch />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Profile</CardTitle>
           <CardDescription>
             Signed in as {me?.user.role === 'admin' ? 'an admin' : 'a member'}.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="flex flex-col gap-4" onSubmit={saveProfile}>
+          <form
+            className="flex flex-col gap-4"
+            onInput={() => setProfileSaved(false)}
+            onSubmit={saveProfile}
+          >
             <Field label="Name">
               <Input name="name" defaultValue={me?.user.name ?? ''} required maxLength={80} />
             </Field>
@@ -97,9 +126,9 @@ export function SettingsPage() {
               <Input name="email" type="email" defaultValue={me?.user.email ?? ''} required />
             </Field>
             <FormError error={profile.error} />
-            {profile.isSuccess ? <p className="text-sm text-primary">Saved.</p> : null}
-            <Button type="submit" className="self-start" disabled={profile.isPending}>
-              Save profile
+            {profileSaved ? <p className="text-sm text-primary">Saved.</p> : null}
+            <Button type="submit" className="self-start" pending={profile.isPending}>
+              {profile.isPending ? 'Saving…' : 'Save profile'}
             </Button>
           </form>
         </CardContent>
@@ -111,7 +140,11 @@ export function SettingsPage() {
           <CardDescription>Other browsers you're signed in on will be signed out.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="flex flex-col gap-4" onSubmit={savePassword}>
+          <form
+            className="flex flex-col gap-4"
+            onInput={() => setPasswordSaved(false)}
+            onSubmit={savePassword}
+          >
             <Field label="Current password">
               <Input
                 name="currentPassword"
@@ -130,14 +163,14 @@ export function SettingsPage() {
               />
             </Field>
             <FormError error={password.error} />
-            {password.isSuccess ? <p className="text-sm text-primary">Password updated.</p> : null}
+            {passwordSaved ? <p className="text-sm text-primary">Password updated.</p> : null}
             <Button
               type="submit"
               variant="outline"
               className="self-start"
-              disabled={password.isPending}
+              pending={password.isPending}
             >
-              Change password
+              {password.isPending ? 'Saving…' : 'Change password'}
             </Button>
           </form>
         </CardContent>
@@ -220,8 +253,14 @@ export function SettingsPage() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button type="submit" variant="outline" size="sm" disabled={rename.isPending}>
-                  Rename
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  pending={rename.isPending && rename.variables?.id === device.id}
+                  disabled={rename.isPending}
+                >
+                  {rename.isPending && rename.variables?.id === device.id ? 'Saving…' : 'Rename'}
                 </Button>
                 <Dialog>
                   <DialogTrigger asChild>
@@ -273,7 +312,7 @@ export function SettingsPage() {
             <Button
               type="button"
               variant="destructive"
-              disabled={unpairing}
+              pending={unpairing}
               onClick={() => {
                 setUnpairing(true);
                 setUnpairError(null);
@@ -293,7 +332,39 @@ export function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : null}
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sign out</CardTitle>
+            <CardDescription>
+              This browser's session ends. Paired phones keep uploading.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-start gap-3">
+            <FormError error={signOutError} />
+            <Button
+              type="button"
+              variant="outline"
+              pending={signingOut}
+              onClick={() => {
+                setSigningOut(true);
+                setSignOutError(null);
+                void api('auth.logout')
+                  .then(async () => {
+                    await refresh();
+                    void navigate('/login');
+                  })
+                  .catch((caught: unknown) => {
+                    setSignOutError(caught);
+                    setSigningOut(false);
+                  });
+              }}
+            >
+              {signingOut ? 'Signing out…' : 'Sign out'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </Page>
   );
 }
@@ -367,7 +438,7 @@ function PairingCard() {
                 alt="Pairing QR code"
                 width={280}
                 height={280}
-                className="rounded-lg border border-border"
+                className="rounded-lg bg-[#fffdf8] p-2"
               />
             ) : (
               <div className="size-[280px] animate-pulse rounded-lg bg-secondary" />
