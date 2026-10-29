@@ -1,11 +1,12 @@
+import { lazy, Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { PlaceholderPage, Shell } from '@/components/shell';
+import { LoadingBlock } from '@/components/states';
 import { AdminPage } from '@/pages/admin';
 import { BackupPage } from '@/pages/backup';
 import { ConnectPage } from '@/pages/connect';
 import { InvitePage } from '@/pages/invite';
 import { LibraryPage } from '@/pages/library';
-import { MapPage } from '@/pages/map';
 import { LoginPage } from '@/pages/login';
 import { MemoryPage } from '@/pages/memory';
 import { PeoplePage, PersonPage } from '@/pages/people';
@@ -14,6 +15,8 @@ import { SettingsPage } from '@/pages/settings';
 import { SetupPage } from '@/pages/setup';
 import { AlbumPage, AlbumsPage } from '@/pages/albums';
 import { GuestOnly, RequireAdmin, RequireAuth } from '@/session';
+
+const MapPage = lazy(() => import('@/pages/map').then((mod) => ({ default: mod.MapPage })));
 
 export function App() {
   return (
@@ -31,7 +34,14 @@ export function App() {
           <Route path="/people/:id" element={<PersonPage />} />
           <Route path="/albums" element={<AlbumsPage />} />
           <Route path="/albums/:id" element={<AlbumPage />} />
-          <Route path="/map" element={<MapPage />} />
+          <Route
+            path="/map"
+            element={
+              <Suspense fallback={<LoadingBlock label="Loading the map" />}>
+                <MapPage />
+              </Suspense>
+            }
+          />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/backup" element={<BackupPage />} />

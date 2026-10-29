@@ -53,6 +53,12 @@
   --ring: #3d9a6e;
   --warning: #3a2e1c;
   --warning-foreground: #f3e1c4;
+  --map-ocean: #143445;
+  --map-ocean-deep: #0e2836;
+  --map-land: #74846c;
+  --map-coast: rgb(244 248 240 / 0.9);
+  --map-border: rgb(244 236 220 / 0.62);
+  --map-ring: #f7f4ee;
   --radius: 0.8rem;
 }
 
@@ -77,6 +83,12 @@ html.light {
   --ring: #1f6b4a;
   --warning: #f3e1c4;
   --warning-foreground: #6b4a1f;
+  --map-ocean: #c5d9e4;
+  --map-ocean-deep: #b3cedc;
+  --map-land: #f6f1e4;
+  --map-coast: rgb(62 84 68 / 0.55);
+  --map-border: rgb(92 74 48 / 0.4);
+  --map-ring: #ffffff;
 }
 
 body {
