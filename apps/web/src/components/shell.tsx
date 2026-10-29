@@ -80,7 +80,13 @@ export function Shell() {
 
       <div className="flex min-h-screen flex-col">
         <header className="flex items-center justify-between gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4 md:hidden">
-          <Brand name={info?.name} />
+          <span
+            className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary font-serif text-sm text-primary-foreground"
+            role="img"
+            aria-label={info?.name ?? 'Not Google Photos'}
+          >
+            ng
+          </span>
           <div className="flex items-center gap-1">
             {onPhone ? (
               <Button variant="ghost" size="icon" asChild>
