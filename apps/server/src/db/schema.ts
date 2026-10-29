@@ -198,8 +198,10 @@ export const files = pgTable(
     mimeType: text('mime_type'),
     refCount: integer('ref_count').notNull().default(0),
     createdAt: createdAt(),
-    /** Last time the stored bytes were re-hashed and matched. */
+    /** Last time the stored bytes were re-hashed. */
     verifiedAt: timestamp('verified_at', tz),
+    /** Set when that check found the file missing or different. Cleared on the next match. */
+    verifyProblem: text('verify_problem'),
   },
   (t) => [
     index('files_sha1_idx').on(t.sha1),
@@ -209,6 +211,10 @@ export const files = pgTable(
     check('files_ref_count_nonnegative', sql`${t.refCount} >= 0`),
     check('files_sha256_hex', sql`${t.sha256} ~ '^[0-9a-f]{64}$'`),
     check('files_sha1_hex', sql`${t.sha1} ~ '^[0-9a-f]{40}$'`),
+    check(
+      'files_verify_problem',
+      sql`${t.verifyProblem} is null or ${t.verifyProblem} in ('missing', 'mismatch')`,
+    ),
   ],
 );
 

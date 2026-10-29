@@ -56,15 +56,25 @@ export class FileStore {
     return this.storage.open(file.storageKey, range);
   }
 
-  /** Re-hashes the stored bytes and compares them with what the database recorded. */
+  /**
+   * Re-hashes the stored bytes and compares them with what the database recorded.
+   * A mismatch is recorded and the file is left as it is.
+   */
   async verify(file: FileRow): Promise<VerifyResult> {
     const digest = await this.storage.digest(file.storageKey);
-    if (!digest) return 'missing';
-    if (digest.size !== file.sizeBytes || digest.sha256 !== file.sha256 || digest.sha1 !== file.sha1) {
-      return 'mismatch';
-    }
-    await this.db.update(files).set({ verifiedAt: new Date() }).where(eq(files.id, file.id));
-    return 'verified';
+    const problem: VerifyResult = !digest
+      ? 'missing'
+      : digest.size !== file.sizeBytes || digest.sha256 !== file.sha256 || digest.sha1 !== file.sha1
+        ? 'mismatch'
+        : 'verified';
+    await this.db
+      .update(files)
+      .set({
+        verifiedAt: new Date(),
+        verifyProblem: problem === 'verified' ? null : problem,
+      })
+      .where(eq(files.id, file.id));
+    return problem;
   }
 
   /**

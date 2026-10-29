@@ -12,6 +12,7 @@ import {
   people,
   tags,
 } from '../db/schema';
+import { syncAlbumRulesForAsset } from '../albums/rules';
 import { MlRejected } from '../ml/client';
 import { refreshPeople } from '../people/library';
 import { LocalStorageProvider } from '../storage/local';
@@ -69,8 +70,17 @@ export async function recognizeAsset(ctx: AppContext, assetId: string): Promise<
     : [];
 
   const detected = analysis.faces.map((face) => ({
-    box: normalizeBox(face.box.x1, face.box.y1, face.box.x2, face.box.y2, analysis.width, analysis.height),
-    landmarks: face.landmarks.map(([x, y]) => normalizePoint(x, y, analysis.width, analysis.height)),
+    box: normalizeBox(
+      face.box.x1,
+      face.box.y1,
+      face.box.x2,
+      face.box.y2,
+      analysis.width,
+      analysis.height,
+    ),
+    landmarks: face.landmarks.map(([x, y]) =>
+      normalizePoint(x, y, analysis.width, analysis.height),
+    ),
     score: face.score,
     quality: face.quality,
     embedding:
@@ -130,7 +140,8 @@ export async function recognizeAsset(ctx: AppContext, assetId: string): Promise<
     const touched = new Set(removed.flatMap((row) => (row.personId ? [row.personId] : [])));
 
     for (const face of detected) {
-      if (manualBoxes.some((box) => intersectionOverUnion(box, face.box) >= MANUAL_OVERLAP)) continue;
+      if (manualBoxes.some((box) => intersectionOverUnion(box, face.box) >= MANUAL_OVERLAP))
+        continue;
       const assignment = choosePerson({
         embedding: face.embedding,
         quality: face.quality,
@@ -183,7 +194,9 @@ export async function recognizeAsset(ctx: AppContext, assetId: string): Promise<
           ),
         );
       const tagId = new Map(vocabulary.map((tag) => [tag.slug, tag.id]));
-      await tx.delete(assetTags).where(and(eq(assetTags.assetId, asset.id), eq(assetTags.source, 'clip')));
+      await tx
+        .delete(assetTags)
+        .where(and(eq(assetTags.assetId, asset.id), eq(assetTags.source, 'clip')));
       const rows = scoredTags.flatMap((tag) => {
         const id = tagId.get(tag.slug);
         if (!id) return [];
@@ -225,8 +238,15 @@ export async function recognizeAsset(ctx: AppContext, assetId: string): Promise<
     return touched.size;
   });
 
+  await syncAlbumRulesForAsset(ctx.db, assetId);
+
   ctx.log.debug(
-    { assetId, faces: detected.length, tags: scoredTags.map((tag) => tag.slug), people: touchedPeople },
+    {
+      assetId,
+      faces: detected.length,
+      tags: scoredTags.map((tag) => tag.slug),
+      people: touchedPeople,
+    },
     'Recognized photo',
   );
 }

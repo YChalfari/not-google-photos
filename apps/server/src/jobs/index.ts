@@ -4,8 +4,10 @@ import type { AppContext } from '../context';
 import { assets } from '../db/schema';
 import { processAsset } from '../media/derivatives';
 import { buildTodaysMemories } from '../memories/on-this-day';
+import { fillMissingPlaces } from '../places/backfill';
 import { recognizeAsset } from '../recognition/recognize';
 import { cleanupExpired, collectUnreferencedFiles } from './maintenance';
+import { verifyStoredFiles } from './verify-files';
 
 /**
  * Queue names. Each handler is idempotent so jobs can be retried and re-run.
@@ -19,6 +21,7 @@ export const QUEUES = {
   recognize: 'asset.recognize',
   recognizeSweep: 'asset.recognize.sweep',
   memories: 'memories.on-this-day',
+  verifyFiles: 'maintenance.verify-files',
 } as const;
 
 export const JOBS_SCHEMA = 'pgboss';
@@ -48,18 +51,20 @@ export async function startJobs(ctx: AppContext): Promise<Jobs> {
   await boss.createQueue(QUEUES.collectFiles, { retryLimit: 2, expireInSeconds: 3600 });
   await boss.createQueue(QUEUES.derivatives, {
     retryLimit: 3,
-    expireInSeconds: 600,
+    expireInSeconds: 1800,
     retryDelay: 30,
   });
   await boss.createQueue(QUEUES.derivativesSweep, { retryLimit: 1, expireInSeconds: 600 });
   await boss.createQueue(QUEUES.recognize, { retryLimit: 8, expireInSeconds: 180, retryDelay: 20 });
   await boss.createQueue(QUEUES.recognizeSweep, { retryLimit: 1, expireInSeconds: 600 });
   await boss.createQueue(QUEUES.memories, { retryLimit: 2, expireInSeconds: 600 });
+  await boss.createQueue(QUEUES.verifyFiles, { retryLimit: 1, expireInSeconds: 3600 });
   await boss.schedule(QUEUES.cleanup, '17 * * * *');
   await boss.schedule(QUEUES.collectFiles, '30 4 * * *');
   await boss.schedule(QUEUES.derivativesSweep, '*/10 * * * *');
   await boss.schedule(QUEUES.recognizeSweep, '*/2 * * * *');
   await boss.schedule(QUEUES.memories, '20 6 * * *');
+  await boss.schedule(QUEUES.verifyFiles, '40 3 * * *');
 
   const enqueueAsset = async (assetId: string) => {
     await boss.send(QUEUES.derivatives, { assetId }, { singletonKey: assetId });
@@ -92,6 +97,23 @@ export async function startJobs(ctx: AppContext): Promise<Jobs> {
     for (const row of pending) await enqueueAsset(row.id);
     return pending.length;
   };
+  /** Ready videos with no playback decision yet. A few at a time, so a transcode does not stall new photos. */
+  const enqueuePlayback = async () => {
+    const pending = await ctx.db
+      .select({ id: assets.id })
+      .from(assets)
+      .where(
+        and(
+          eq(assets.type, 'video'),
+          eq(assets.processingState, 'ready'),
+          isNull(assets.trashedAt),
+          sql`coalesce(${assets.processingSteps}->>'playback', '') = ''`,
+        ),
+      )
+      .limit(8);
+    for (const row of pending) await enqueueAsset(row.id);
+    return pending.length;
+  };
 
   await boss.work(QUEUES.cleanup, async () => {
     const result = await cleanupExpired(ctx.db);
@@ -101,12 +123,20 @@ export async function startJobs(ctx: AppContext): Promise<Jobs> {
     const result = await collectUnreferencedFiles(ctx.files);
     log.info(result, 'Removed unreferenced files');
   });
-  await boss.work<{ assetId: string }>(QUEUES.derivatives, async (jobs) => {
-    for (const job of jobs) await processAsset(ctx, job.data.assetId);
-  });
+  await boss.work<{ assetId: string }>(
+    QUEUES.derivatives,
+    { localConcurrency: 1, batchSize: 1 },
+    async (jobs) => {
+      for (const job of jobs) await processAsset(ctx, job.data.assetId);
+    },
+  );
   await boss.work(QUEUES.derivativesSweep, async () => {
     const queued = await enqueuePending();
     if (queued > 0) log.info({ queued }, 'Queued photos that still need thumbnails');
+    const places = await fillMissingPlaces(ctx.db);
+    if (places.filled > 0) log.info({ filled: places.filled }, 'Filled in place names');
+    const playback = await enqueuePlayback();
+    if (playback > 0) log.info({ queued: playback }, 'Queued videos that need a playable copy');
   });
   await boss.work<{ assetId: string }>(
     QUEUES.recognize,
@@ -130,6 +160,9 @@ export async function startJobs(ctx: AppContext): Promise<Jobs> {
     const result = await buildTodaysMemories(ctx);
     log.info(result, 'Built on-this-day memories');
   });
+  await boss.work(QUEUES.verifyFiles, async () => {
+    await verifyStoredFiles(ctx);
+  });
   await boss.send(QUEUES.memories, {}, { singletonKey: 'startup' });
 
   const queued = await enqueuePending();
@@ -137,6 +170,8 @@ export async function startJobs(ctx: AppContext): Promise<Jobs> {
   const unrecognised = await enqueueUnrecognised();
   if (unrecognised > 0)
     log.info({ queued: unrecognised }, 'Queued photos that still need people and tags');
+  const playback = await enqueuePlayback();
+  if (playback > 0) log.info({ queued: playback }, 'Queued videos that need a playable copy');
 
   let running = true;
   return {

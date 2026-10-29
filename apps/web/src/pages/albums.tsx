@@ -83,10 +83,7 @@ export function AlbumsPage() {
         />
       ) : null}
       {albums.data && albums.data.albums.length === 0 ? (
-        <EmptyState
-          title="No albums yet"
-          body="Make one, then add photos from the library."
-        />
+        <EmptyState title="No albums yet" body="Make one, then add photos from the library." />
       ) : null}
       {albums.data && albums.data.albums.length > 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -152,6 +149,19 @@ export function AlbumPage() {
     queryKey: ['users', 'directory'],
     queryFn: () => api('users.directory'),
     enabled: album.data?.album.role === 'owner',
+  });
+  const canLinkPeople =
+    (album.data?.album.role === 'owner' || album.data?.album.role === 'contributor') &&
+    album.data.album.invited === false;
+  const myPeople = useQuery({
+    queryKey: ['people'],
+    queryFn: () => api('people.list'),
+    enabled: canLinkPeople,
+  });
+  const suggestions = useQuery({
+    queryKey: ['albums', id, 'suggestions'],
+    queryFn: () => api('albums.ruleSuggestions', { params: { id } }),
+    enabled: canLinkPeople,
   });
 
   const invalidate = async () => {
@@ -223,6 +233,23 @@ export function AlbumPage() {
       announce(result.removed === 0 ? 'Nothing removed' : `Removed ${result.removed}`);
       setSelected(null);
       await invalidate();
+    },
+  });
+  const addRule = useMutation({
+    mutationFn: (body: { personId: string; startDate?: string }) =>
+      api('albums.rules.add', { params: { id }, body }),
+    onSuccess: async () => {
+      announce('Added their photos');
+      await invalidate();
+      await queryClient.invalidateQueries({ queryKey: ['albums', id, 'suggestions'] });
+    },
+  });
+  const removeRule = useMutation({
+    mutationFn: (ruleId: string) => api('albums.rules.remove', { params: { id, ruleId } }),
+    onSuccess: async () => {
+      announce('Removed');
+      await invalidate();
+      await queryClient.invalidateQueries({ queryKey: ['albums', id, 'suggestions'] });
     },
   });
 
@@ -490,6 +517,116 @@ export function AlbumPage() {
               </form>
             ) : null}
           </section>
+
+          {detail ? (
+            <section className="flex flex-col gap-3">
+              <h2 className="font-serif text-2xl">Photos of</h2>
+              {detail.rules.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No one linked yet.</p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {detail.rules.map((rule) => (
+                    <li
+                      key={rule.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                    >
+                      <p className="text-sm">
+                        {rule.person.name ?? 'Unnamed'}
+                        {rule.startDate ? ` from ${rule.startDate}` : ''}
+                      </p>
+                      {detail.role === 'owner' || rule.userId === selfId ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          pending={removeRule.isPending && removeRule.variables === rule.id}
+                          disabled={removeRule.isPending}
+                          onClick={() => removeRule.mutate(rule.id)}
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {canEditPhotos ? (
+                <form
+                  className="flex flex-col gap-3 sm:flex-row sm:items-end"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const form = event.currentTarget;
+                    const data = new FormData(form);
+                    const personId = formText(data, 'personId');
+                    if (!personId) return;
+                    const startDate = formText(data, 'startDate');
+                    addRule.mutate(
+                      { personId, ...(startDate ? { startDate } : {}) },
+                      { onSuccess: () => form.reset() },
+                    );
+                  }}
+                >
+                  <Field label="Add a person">
+                    <select
+                      name="personId"
+                      className="h-10 rounded-md border border-input bg-card px-3 text-sm"
+                      defaultValue=""
+                      required
+                    >
+                      <option value="" disabled>
+                        Choose
+                      </option>
+                      {(myPeople.data?.people ?? [])
+                        .filter(
+                          (person) =>
+                            !detail.rules.some(
+                              (rule) => rule.person.id === person.id && rule.userId === selfId,
+                            ),
+                        )
+                        .map((person) => (
+                          <option key={person.id} value={person.id}>
+                            {person.name ?? 'Unnamed'}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                  <Field label="From" hint="Optional.">
+                    <Input name="startDate" type="date" />
+                  </Field>
+                  <Button type="submit" pending={addRule.isPending} disabled={addRule.isPending}>
+                    {addRule.isPending ? 'Adding…' : 'Add their photos'}
+                  </Button>
+                  <FormError error={addRule.error} />
+                </form>
+              ) : null}
+              {suggestions.data?.suggestions.map((suggestion) => (
+                <div
+                  key={`${suggestion.ruleId}:${suggestion.candidate.id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                >
+                  <div>
+                    <p className="text-sm">
+                      Is this them? {suggestion.candidate.name ?? 'Unnamed'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {suggestion.sharedBy.name} added {suggestion.sharedPersonName ?? 'someone'}.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    pending={
+                      addRule.isPending && addRule.variables?.personId === suggestion.candidate.id
+                    }
+                    disabled={addRule.isPending}
+                    onClick={() => addRule.mutate({ personId: suggestion.candidate.id })}
+                  >
+                    Add their photos
+                  </Button>
+                </div>
+              ))}
+            </section>
+          ) : null}
 
           {photos.isPending ? <LoadingBlock label="Loading photos" /> : null}
           {photos.isError ? (

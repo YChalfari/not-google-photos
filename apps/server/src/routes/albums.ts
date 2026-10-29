@@ -1,5 +1,6 @@
 import type { AlbumDetail, AlbumSummary } from '@ngp/shared';
 import { and, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { applyAlbumRule, removeAlbumRuleLinks, suggestRulesForAlbum } from '../albums/rules';
 import { canViewAlbum, filterOwnedAssetIds } from '../authz/access';
 import type { AppContext } from '../context';
 import type { DbOrTx } from '../db/client';
@@ -13,7 +14,7 @@ import {
   users,
   type AlbumRow,
 } from '../db/schema';
-import { ApiError } from '../http/errors';
+import { ApiError, isUniqueViolation } from '../http/errors';
 import type { Handlers } from '../http/contract';
 import { availableVariants } from '../media/serve';
 import { toSummaries } from '../media/summaries';
@@ -560,5 +561,72 @@ export const albumHandlers: Handlers = {
       .where(and(eq(albumMembers.albumId, album.id), eq(albumMembers.userId, params.userId)))
       .returning({ userId: albumMembers.userId });
     if (removed.length === 0) throw new ApiError('not_found', 'That person is not in this album');
+  },
+
+  'albums.rules.add': async ({ ctx, auth, params, body }) => {
+    const { album, view } = await requireAlbum(ctx, auth.user.id, params.id);
+    if (!view.accepted) throw new ApiError('forbidden', 'Join the album before adding people');
+    if (!view.canContribute) {
+      throw new ApiError('forbidden', 'You can view this album, but not add to it');
+    }
+    const [person] = await ctx.db
+      .select({ id: people.id, name: people.name })
+      .from(people)
+      .where(and(eq(people.id, body.personId), eq(people.ownerId, auth.user.id)));
+    if (!person) throw new ApiError('not_found', 'That person is not in your library');
+    try {
+      const [rule] = await ctx.db
+        .insert(albumRules)
+        .values({
+          albumId: album.id,
+          userId: auth.user.id,
+          personId: person.id,
+          startDate: body.startDate ?? null,
+        })
+        .returning();
+      if (!rule) throw new ApiError('internal_error', 'Could not add that person');
+      await ctx.db.update(albums).set({ isLive: true }).where(eq(albums.id, album.id));
+      await applyAlbumRule(ctx.db, rule.id);
+      return {
+        rule: {
+          id: rule.id,
+          userId: rule.userId,
+          person: { id: person.id, name: person.name },
+          startDate: rule.startDate,
+        },
+      };
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ApiError('conflict', 'That person is already in this album');
+      }
+      throw error;
+    }
+  },
+
+  'albums.rules.remove': async ({ ctx, auth, params }) => {
+    const { album, view } = await requireAlbum(ctx, auth.user.id, params.id);
+    if (!view.accepted) throw new ApiError('not_found', 'That album is not in your library');
+    const [rule] = await ctx.db
+      .select()
+      .from(albumRules)
+      .where(and(eq(albumRules.id, params.ruleId), eq(albumRules.albumId, album.id)));
+    if (!rule) throw new ApiError('not_found', 'That person is not linked to this album');
+    if (!view.isOwner && rule.userId !== auth.user.id) {
+      throw new ApiError('forbidden', 'Only the owner can remove a person someone else added');
+    }
+    await removeAlbumRuleLinks(ctx.db, rule.id);
+    await ctx.db.delete(albumRules).where(eq(albumRules.id, rule.id));
+    const [left] = await ctx.db
+      .select({ id: albumRules.id })
+      .from(albumRules)
+      .where(eq(albumRules.albumId, album.id))
+      .limit(1);
+    if (!left) await ctx.db.update(albums).set({ isLive: false }).where(eq(albums.id, album.id));
+  },
+
+  'albums.ruleSuggestions': async ({ ctx, auth, params }) => {
+    const { album, view } = await requireAlbum(ctx, auth.user.id, params.id);
+    if (!view.accepted) throw new ApiError('not_found', 'That album is not in your library');
+    return { suggestions: await suggestRulesForAlbum(ctx.db, auth.user.id, album.id) };
   },
 };

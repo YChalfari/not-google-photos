@@ -1,6 +1,15 @@
 import type { FaceSummary } from '@ngp/shared';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
-import { albumRules, assets, faceFeedback, faces, people, type FaceRow, type PersonRow } from '../db/schema';
+import { applyAlbumRule, removeAlbumRuleLinks, syncAlbumRulesForAsset } from '../albums/rules';
+import {
+  albumRules,
+  assets,
+  faceFeedback,
+  faces,
+  people,
+  type FaceRow,
+  type PersonRow,
+} from '../db/schema';
 import { ApiError } from '../http/errors';
 import type { Handlers } from '../http/contract';
 import { toSummaries } from '../media/summaries';
@@ -92,7 +101,8 @@ export const peopleHandlers: Handlers = {
       throw new ApiError('bad_request', 'Choose a different person to merge');
     }
     const sources: PersonRow[] = [];
-    for (const sourceId of sourceIds) sources.push(await requirePerson(ctx, auth.user.id, sourceId));
+    for (const sourceId of sourceIds)
+      sources.push(await requirePerson(ctx, auth.user.id, sourceId));
 
     const keptCover = target.coverFaceId;
     let name = target.name;
@@ -105,8 +115,15 @@ export const peopleHandlers: Handlers = {
             .select({ id: albumRules.id })
             .from(albumRules)
             .where(and(eq(albumRules.albumId, rule.albumId), eq(albumRules.personId, target.id)));
-          if (clash) await tx.delete(albumRules).where(eq(albumRules.id, rule.id));
-          else await tx.update(albumRules).set({ personId: target.id }).where(eq(albumRules.id, rule.id));
+          if (clash) {
+            await removeAlbumRuleLinks(tx, rule.id);
+            await tx.delete(albumRules).where(eq(albumRules.id, rule.id));
+          } else {
+            await tx
+              .update(albumRules)
+              .set({ personId: target.id })
+              .where(eq(albumRules.id, rule.id));
+          }
         }
         await tx
           .update(faces)
@@ -116,6 +133,11 @@ export const peopleHandlers: Handlers = {
         if (!coverFaceId && source.coverFaceId) coverFaceId = source.coverFaceId;
         await tx.delete(people).where(eq(people.id, source.id));
       }
+      const keptRules = await tx
+        .select({ id: albumRules.id })
+        .from(albumRules)
+        .where(eq(albumRules.personId, target.id));
+      for (const rule of keptRules) await applyAlbumRule(tx, rule.id);
       await tx.update(people).set({ name, coverFaceId }).where(eq(people.id, target.id));
       await refreshPeople(tx, [target.id]);
       if (keptCover) {
@@ -187,6 +209,7 @@ export const peopleHandlers: Handlers = {
       ctx.db,
       [face.personId, updated?.personId].flatMap((id) => (id ? [id] : [])),
     );
+    await syncAlbumRulesForAsset(ctx.db, face.assetId);
     return { face: toFace(updated!) };
   },
 
@@ -199,7 +222,12 @@ export const peopleHandlers: Handlers = {
     const person = await requirePerson(ctx, auth.user.id, body.personId);
     await ctx.db
       .insert(faceFeedback)
-      .values({ faceId: face.id, personId: person.id, ownerId: auth.user.id, kind: 'not_this_person' })
+      .values({
+        faceId: face.id,
+        personId: person.id,
+        ownerId: auth.user.id,
+        kind: 'not_this_person',
+      })
       .onConflictDoNothing();
     await ctx.db
       .update(faces)

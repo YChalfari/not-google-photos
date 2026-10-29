@@ -1,6 +1,15 @@
 import { z } from 'zod';
 import { defineEndpoints } from '../contract/define';
-import { BaseUrl, Bytes, Email, Id, IdParams, IsoDateTime, PersonName, UserRole } from '../primitives';
+import {
+  BaseUrl,
+  Bytes,
+  Email,
+  Id,
+  IdParams,
+  IsoDateTime,
+  PersonName,
+  UserRole,
+} from '../primitives';
 import { LibraryStatus } from './server';
 
 export const AdminUser = z
@@ -44,6 +53,16 @@ export const ServerSettings = z
     /** Values from the environment, used when the admin hasn't set an address here. */
     defaults: z.object({ homeUrl: BaseUrl.nullable(), remoteUrl: BaseUrl.nullable() }),
     library: LibraryStatus,
+    /** Files whose nightly re-hash did not match. The bytes are left as they are. */
+    files: z.object({
+      problemCount: z.number().int().nonnegative(),
+      problems: z.array(
+        z.object({
+          id: Id,
+          problem: z.enum(['missing', 'mismatch']),
+        }),
+      ),
+    }),
   })
   .meta({ id: 'ServerSettings' });
 export type ServerSettings = z.infer<typeof ServerSettings>;

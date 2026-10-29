@@ -8,6 +8,7 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "moduleDetection": "force",
+    "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "strict": true,

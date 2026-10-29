@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TimelineScope } from '@ngp/shared';
 import { ImagePlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -7,14 +7,23 @@ import { AddToAlbumButton } from '@/components/add-to-album';
 import { AssetDialog } from '@/components/asset-dialog';
 import { PhotoGrid } from '@/components/photo-grid';
 import { SelectionBar } from '@/components/selection-bar';
-import { EmptyState, ErrorState, LoadingBlock, Page } from '@/components/states';
+import { EmptyState, ErrorState, FormError, LoadingBlock, Page } from '@/components/states';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { api, errorMessage } from '@/lib/api';
 import { useAssetParam } from '@/lib/asset-route';
 import { useAssetBatch } from '@/lib/asset-batch';
 import { formatBytes, formatMonth } from '@/lib/format';
 import { assetUrl } from '@/lib/native';
 import { uploadAsset } from '@/lib/upload';
+import { useStatus } from '@/lib/status';
 import { useSession } from '@/session-context';
 
 const SCOPES: Array<{ id: TimelineScope; label: string }> = [
@@ -27,6 +36,7 @@ const SCOPES: Array<{ id: TimelineScope; label: string }> = [
 export function LibraryPage() {
   const { me } = useSession();
   const queryClient = useQueryClient();
+  const announce = useStatus();
   const [params, setParams] = useSearchParams();
   const requested = params.get('scope');
   const scope: TimelineScope = SCOPES.some((item) => item.id === requested)
@@ -37,8 +47,18 @@ export function LibraryPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string> | null>(null);
+  const [confirmEmpty, setConfirmEmpty] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const batch = useAssetBatch();
+  const emptyTrash = useMutation({
+    mutationFn: () => api('assets.emptyTrash'),
+    onSuccess: async (result) => {
+      setConfirmEmpty(false);
+      announce(result.deleted === 0 ? 'Trash is empty' : 'Trash emptied');
+      await queryClient.invalidateQueries({ queryKey: ['timeline'] });
+      await queryClient.invalidateQueries({ queryKey: ['me', 'storage'] });
+    },
+  });
 
   const storage = useQuery({ queryKey: ['me', 'storage'], queryFn: () => api('me.storage') });
   const buckets = useQuery({
@@ -99,10 +119,7 @@ export function LibraryPage() {
     storage.data?.quotaBytes == null ? null : `of ${formatBytes(storage.data.quotaBytes)}`;
 
   return (
-    <Page
-      wide
-      title={me ? `${me.user.name}'s library` : 'Library'}
-    >
+    <Page wide title={me ? `${me.user.name}'s library` : 'Library'}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1">
           {SCOPES.map((item) => (
@@ -153,6 +170,45 @@ export function LibraryPage() {
           </Button>
         </div>
       </div>
+      {scope === 'trash' ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">Kept for 30 days, then deleted.</p>
+          <Dialog open={confirmEmpty} onOpenChange={setConfirmEmpty}>
+            <DialogTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={!buckets.data || buckets.data.buckets.length === 0}
+              >
+                Empty trash
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogTitle>Empty trash?</DialogTitle>
+              <DialogDescription>
+                This deletes everything in the trash. It can't be undone.
+              </DialogDescription>
+              <div className="mt-6 flex justify-end gap-2">
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">
+                    Keep them
+                  </Button>
+                </DialogClose>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  pending={emptyTrash.isPending}
+                  onClick={() => emptyTrash.mutate()}
+                >
+                  {emptyTrash.isPending ? 'Deleting…' : 'Empty trash'}
+                </Button>
+              </div>
+              <FormError error={emptyTrash.error} />
+            </DialogContent>
+          </Dialog>
+        </div>
+      ) : null}
 
       {uploadError ? (
         <ErrorState title="Couldn't add that file" error={new Error(uploadError)} />

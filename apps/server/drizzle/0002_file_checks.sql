@@ -1,0 +1,2 @@
+ALTER TABLE "files" ADD COLUMN "verify_problem" text;--> statement-breakpoint
+ALTER TABLE "files" ADD CONSTRAINT "files_verify_problem" CHECK ("files"."verify_problem" is null or "files"."verify_problem" in ('missing', 'mismatch'));

@@ -103,6 +103,21 @@ export function AdminPage() {
             Leave a field blank to keep what's already set.
             {server.data ? ` ${server.data.library.message}` : ''}
           </CardDescription>
+          {server.data ? (
+            <p
+              className={
+                server.data.files.problemCount > 0
+                  ? 'text-sm text-destructive'
+                  : 'text-sm text-muted-foreground'
+              }
+            >
+              {server.data.files.problemCount === 0
+                ? 'No file problems.'
+                : server.data.files.problemCount === 1
+                  ? "1 stored file doesn't match. Left as it is."
+                  : `${server.data.files.problemCount} stored files don't match. Left as they are.`}
+            </p>
+          ) : null}
         </CardHeader>
         <CardContent>
           {server.isPending ? <LoadingBlock label="Loading server settings" /> : null}
@@ -128,10 +143,7 @@ export function AdminPage() {
                   defaultValue={server.data.homeUrl ?? ''}
                 />
               </Field>
-              <Field
-                label="Remote address"
-                hint="Optional. For when a phone is away from home."
-              >
+              <Field label="Remote address" hint="Optional. For when a phone is away from home.">
                 <Input
                   name="remoteUrl"
                   placeholder="https://photos.example.com"

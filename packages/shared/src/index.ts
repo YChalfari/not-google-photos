@@ -12,6 +12,7 @@ export * from './api/admin';
 export * from './api/users';
 export * from './api/devices';
 export * from './api/media';
+export * from './api/map';
 export * from './api/assets';
 export * from './api/timeline';
 export * from './api/people';

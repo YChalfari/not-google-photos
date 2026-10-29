@@ -74,18 +74,19 @@ describe('health, identity, and the contract surface', () => {
     expect(doc.paths['/api/assets']?.post?.['x-implemented']).toBe(true);
     expect(doc.paths['/api/people']?.get?.['x-implemented']).toBe(true);
     expect(doc.paths['/api/search']?.get?.['x-implemented']).toBe(true);
-    expect(doc.paths['/api/albums']?.get?.['x-implemented']).toBe(false);
+    expect(doc.paths['/api/albums']?.get?.['x-implemented']).toBe(true);
+    expect(doc.paths['/api/map']?.get?.['x-implemented']).toBe(true);
   });
 
-  it('answers unimplemented endpoints with 501 after the auth check', async () => {
+  it('requires a session, then answers the library endpoints', async () => {
     const anon = await new TestClient(t.app).call('timeline.buckets');
     expect(anon.status).toBe(401);
 
     await createUser(t.ctx, { email: 'alex@example.com', role: 'admin' });
     const client = await signIn(t.app, 'alex@example.com');
     const albums = await client.call('albums.list');
-    expect(albums.status).toBe(501);
-    expect(albums.error?.code).toBe('not_implemented');
+    expect(albums.status).toBe(200);
+    expect(albums.data.albums).toEqual([]);
 
     const people = await client.call('people.list');
     expect(people.status).toBe(200);
@@ -129,13 +130,24 @@ describe('merging people', () => {
     const maya = await insertPerson(t.ctx, user.id, 'Maya');
     const duplicate = await insertPerson(t.ctx, user.id, null);
     const another = await insertPerson(t.ctx, user.id, null);
-    const mayaFace = await insertFace(t.ctx, { assetId: kept.id, ownerId: user.id, personId: maya.id });
-    const duplicateFace = await insertFace(t.ctx, { assetId: other.id, ownerId: user.id, personId: duplicate.id });
+    const mayaFace = await insertFace(t.ctx, {
+      assetId: kept.id,
+      ownerId: user.id,
+      personId: maya.id,
+    });
+    const duplicateFace = await insertFace(t.ctx, {
+      assetId: other.id,
+      ownerId: user.id,
+      personId: duplicate.id,
+    });
     await insertFace(t.ctx, { assetId: third.id, ownerId: user.id, personId: another.id });
     await t.ctx.db.update(faces).set({ quality: 0.2 }).where(eq(faces.id, mayaFace.id));
     await t.ctx.db.update(faces).set({ quality: 0.99 }).where(eq(faces.id, duplicateFace.id));
     await t.ctx.db.update(people).set({ coverFaceId: mayaFace.id }).where(eq(people.id, maya.id));
-    await t.ctx.db.update(people).set({ coverFaceId: duplicateFace.id }).where(eq(people.id, duplicate.id));
+    await t.ctx.db
+      .update(people)
+      .set({ coverFaceId: duplicateFace.id })
+      .where(eq(people.id, duplicate.id));
 
     const merged = await client.call('people.merge', {
       params: { id: maya.id },

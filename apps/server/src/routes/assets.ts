@@ -4,6 +4,8 @@ import { canViewAsset, filterOwnedAssetIds } from '../authz/access';
 import { assets, files } from '../db/schema';
 import type { Handlers } from '../http/contract';
 import { ApiError, isUniqueViolation, validationError } from '../http/errors';
+import { syncAlbumRulesForAssets } from '../albums/rules';
+import { deleteTrashedAssets } from '../jobs/maintenance';
 import { scheduleAssetProcessing } from '../media/derivatives';
 import { classifyUpload, originalFilename } from '../media/kinds';
 import { receiveUpload } from '../media/multipart';
@@ -190,6 +192,16 @@ export const assetHandlers: Handlers = {
       })
       .where(and(eq(assets.ownerId, auth.user.id), inArray(assets.id, [...owned])))
       .returning({ id: assets.id });
+    if (body.isTrashed === false) {
+      await syncAlbumRulesForAssets(
+        ctx.db,
+        updated.map((row) => row.id),
+      );
+    }
     return { updated: updated.length };
   },
+
+  'assets.emptyTrash': async ({ ctx, auth }) => ({
+    deleted: await deleteTrashedAssets(ctx.db, { ownerId: auth.user.id }),
+  }),
 };

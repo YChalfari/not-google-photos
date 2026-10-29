@@ -1,21 +1,40 @@
 import type { ServerSettings } from '@ngp/shared';
-import { and, asc, count, eq, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { deleteUserSessions } from '../auth/sessions';
 import type { AppContext } from '../context';
-import { serverConfig, users } from '../db/schema';
+import { files, serverConfig, users } from '../db/schema';
 import type { Handlers } from '../http/contract';
 import { ApiError } from '../http/errors';
-import {
-  activeDeviceCounts,
-  storageUsageByUser,
-  toAdminUser,
-} from '../services/accounts';
+import { activeDeviceCounts, storageUsageByUser, toAdminUser } from '../services/accounts';
 import { getServerConfig } from '../services/server-config';
 
+async function fileProblems(ctx: AppContext): Promise<ServerSettings['files']> {
+  const [problemRows, counted] = await Promise.all([
+    ctx.db
+      .select({ id: files.id, problem: files.verifyProblem })
+      .from(files)
+      .where(isNotNull(files.verifyProblem))
+      .limit(20),
+    ctx.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(files)
+      .where(isNotNull(files.verifyProblem)),
+  ]);
+  return {
+    problemCount: Number(counted[0]?.count ?? 0),
+    problems: problemRows.flatMap((row) =>
+      row.problem === 'missing' || row.problem === 'mismatch'
+        ? [{ id: row.id, problem: row.problem }]
+        : [],
+    ),
+  };
+}
+
 async function serverSettings(ctx: AppContext): Promise<ServerSettings> {
-  const [config, library] = await Promise.all([
+  const [config, library, stored] = await Promise.all([
     getServerConfig(ctx.db),
     ctx.library.status({ fresh: true }),
+    fileProblems(ctx),
   ]);
   return {
     serverId: config.serverId,
@@ -25,6 +44,7 @@ async function serverSettings(ctx: AppContext): Promise<ServerSettings> {
     remoteUrl: config.remoteUrl,
     defaults: { homeUrl: ctx.env.HOME_URL ?? null, remoteUrl: ctx.env.REMOTE_URL ?? null },
     library,
+    files: stored,
   };
 }
 
@@ -36,7 +56,9 @@ export const adminHandlers: Handlers = {
       storageUsageByUser(ctx.db),
     ]);
     return {
-      users: rows.map((user) => toAdminUser(user, deviceCounts.get(user.id) ?? 0, usage.get(user.id))),
+      users: rows.map((user) =>
+        toAdminUser(user, deviceCounts.get(user.id) ?? 0, usage.get(user.id)),
+      ),
     };
   },
 
@@ -47,14 +69,18 @@ export const adminHandlers: Handlers = {
       if (!target) throw new ApiError('not_found', 'User not found');
 
       const isActiveAdmin = target.role === 'admin' && !target.disabledAt;
-      const losesAdmin = (body.role !== undefined && body.role !== 'admin') || body.disabled === true;
+      const losesAdmin =
+        (body.role !== undefined && body.role !== 'admin') || body.disabled === true;
       if (isActiveAdmin && losesAdmin) {
         const [others] = await tx
           .select({ value: count() })
           .from(users)
           .where(and(eq(users.role, 'admin'), isNull(users.disabledAt), ne(users.id, target.id)));
         if (!others?.value) {
-          throw new ApiError('conflict', 'This is the last active admin. Make someone else an admin first.');
+          throw new ApiError(
+            'conflict',
+            'This is the last active admin. Make someone else an admin first.',
+          );
         }
       }
 

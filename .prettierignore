@@ -3,6 +3,8 @@ pnpm-lock.yaml
 **/coverage/
 data/
 apps/server/drizzle/
+apps/server/src/places/cities.json
+apps/web/src/map/land.json
 apps/ml/
 apps/mobile/android/
 apps/mobile/ios/

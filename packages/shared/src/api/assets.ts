@@ -233,4 +233,13 @@ export const assetEndpoints = defineEndpoints({
     response: z.object({ updated: z.number().int().nonnegative() }),
     stability: 'draft',
   },
+  'assets.emptyTrash': {
+    method: 'POST',
+    path: '/api/assets/trash/empty',
+    auth: 'user',
+    tag: 'assets',
+    summary: 'Delete everything in your trash now',
+    response: z.object({ deleted: z.number().int().nonnegative() }),
+    stability: 'draft',
+  },
 });

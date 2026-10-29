@@ -1,4 +1,4 @@
-import { and, isNotNull, lt, or } from 'drizzle-orm';
+import { and, eq, isNotNull, lt, or } from 'drizzle-orm';
 import { deleteExpiredSessions } from '../auth/sessions';
 import type { Db } from '../db/client';
 import { assets, pairingCodes } from '../db/schema';
@@ -7,6 +7,21 @@ import type { FileStore } from '../storage/file-store';
 const DAY_MS = 86_400_000;
 /** Trash is restorable until this age, then the asset row is deleted and the blob can be collected. */
 const TRASH_DAYS = 30;
+
+/** Deletes trashed asset rows. Blobs are collected later, once nothing points at them. */
+export async function deleteTrashedAssets(
+  db: Db,
+  options: { olderThan?: Date; ownerId?: string } = {},
+): Promise<number> {
+  const filters = [isNotNull(assets.trashedAt)];
+  if (options.olderThan) filters.push(lt(assets.trashedAt, options.olderThan));
+  if (options.ownerId) filters.push(eq(assets.ownerId, options.ownerId));
+  const trashed = await db
+    .delete(assets)
+    .where(and(...filters))
+    .returning({ id: assets.id });
+  return trashed.length;
+}
 
 /** Expired sessions, used pairing codes, and assets that have been in the trash for 30 days. */
 export async function cleanupExpired(db: Db, now = new Date()) {
@@ -21,16 +36,10 @@ export async function cleanupExpired(db: Db, now = new Date()) {
       ),
     )
     .returning({ id: pairingCodes.id });
-  const trashed = await db
-    .delete(assets)
-    .where(
-      and(
-        isNotNull(assets.trashedAt),
-        lt(assets.trashedAt, new Date(now.getTime() - TRASH_DAYS * DAY_MS)),
-      ),
-    )
-    .returning({ id: assets.id });
-  return { sessions, pairingCodes: codes.length, trashedAssets: trashed.length };
+  const trashedCount = await deleteTrashedAssets(db, {
+    olderThan: new Date(now.getTime() - TRASH_DAYS * DAY_MS),
+  });
+  return { sessions, pairingCodes: codes.length, trashedAssets: trashedCount };
 }
 
 /** Removes blobs no asset or derived copy points at any more. */

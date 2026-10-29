@@ -5,6 +5,7 @@ import { BackupPage } from '@/pages/backup';
 import { ConnectPage } from '@/pages/connect';
 import { InvitePage } from '@/pages/invite';
 import { LibraryPage } from '@/pages/library';
+import { MapPage } from '@/pages/map';
 import { LoginPage } from '@/pages/login';
 import { MemoryPage } from '@/pages/memory';
 import { PeoplePage, PersonPage } from '@/pages/people';
@@ -30,6 +31,7 @@ export function App() {
           <Route path="/people/:id" element={<PersonPage />} />
           <Route path="/albums" element={<AlbumsPage />} />
           <Route path="/albums/:id" element={<AlbumPage />} />
+          <Route path="/map" element={<MapPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/backup" element={<BackupPage />} />
@@ -40,10 +42,7 @@ export function App() {
           <Route
             path="*"
             element={
-              <PlaceholderPage
-                title="That page isn't here"
-                body="Head back to the library."
-              />
+              <PlaceholderPage title="That page isn't here" body="Head back to the library." />
             }
           />
         </Route>

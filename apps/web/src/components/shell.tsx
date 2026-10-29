@@ -1,5 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { CloudUpload, FolderHeart, Images, Search, Settings, Shield, Users } from 'lucide-react';
+import {
+  CloudUpload,
+  FolderHeart,
+  Images,
+  MapPin,
+  Search,
+  Settings,
+  Shield,
+  Users,
+} from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useStatus } from '@/lib/status';
@@ -15,6 +24,7 @@ const NAV = [
   { to: '/', label: 'Library', icon: Images, end: true },
   { to: '/people', label: 'People', icon: Users, end: false },
   { to: '/albums', label: 'Albums', icon: FolderHeart, end: false },
+  { to: '/map', label: 'Map', icon: MapPin, end: false },
   { to: '/search', label: 'Search', icon: Search, end: false },
 ] as const;
 
@@ -113,7 +123,7 @@ export function Shell() {
         <main className="flex-1 px-4 pt-2 pb-24 md:px-8 md:py-8">
           <Outlet />
         </main>
-        <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-border bg-card/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-border bg-card/95 px-1 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
           {NAV.map((item) => (
             <BottomLink key={item.to} {...item} />
           ))}

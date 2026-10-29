@@ -5,8 +5,10 @@ import sharp from 'sharp';
 import { rgbaToThumbHash } from 'thumbhash';
 import type { AppContext } from '../context';
 import { assetFiles, assets, type AssetRow, type FileRow } from '../db/schema';
+import { nearestPlace } from '../places/geocode';
 import { scheduleRecognition } from '../recognition/recognize';
 import { LocalStorageProvider } from '../storage/local';
+import { ensurePlayback } from './playback';
 import { partsFromExif } from './time';
 
 const THUMB_EDGE = 480;
@@ -192,6 +194,10 @@ export async function processAsset(
         : await readExif(source, asset.timezone ?? 'UTC').catch(() => null);
     if (options.exif !== false) steps.metadata = exif ? 'done' : 'skipped';
 
+    if (asset.type === 'video') {
+      steps.playback = await ensurePlayback(ctx, asset, source);
+    }
+
     const picture = asset.type === 'video' ? await videoPoster(source) : source;
     if (!picture) {
       steps.thumbnails = 'skipped';
@@ -253,11 +259,26 @@ async function mark(
   exif?: ExifPatch | null,
   image?: { width?: number; height?: number; thumbhash?: string },
 ) {
+  const latitude = exif?.latitude ?? asset.latitude;
+  const longitude = exif?.longitude ?? asset.longitude;
+  const place =
+    latitude != null && longitude != null && !asset.city ? nearestPlace(latitude, longitude) : null;
+  if (latitude != null && longitude != null && !asset.city) {
+    steps.places = place ? 'done' : 'none';
+  }
   await ctx.db
     .update(assets)
     .set({
       processingState: state,
       processingSteps: steps,
+      ...(place
+        ? {
+            city: place.city,
+            region: place.region,
+            country: place.country,
+            countryCode: place.countryCode,
+          }
+        : {}),
       ...(image?.width ? { width: image.width } : {}),
       ...(image?.height ? { height: image.height } : {}),
       ...(image?.thumbhash ? { thumbhash: image.thumbhash } : {}),

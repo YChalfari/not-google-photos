@@ -25,11 +25,15 @@ export function useAssetBatch() {
       const count = body.ids.length;
       if (body.isTrashed === true) {
         const message = count === 1 ? 'Moved to trash' : `Moved ${count} to trash`;
-        announce(message, () => {
-          void api('assets.update', { body: { ids: body.ids, isTrashed: false } }).then(() =>
-            refreshLibrary(queryClient),
-          );
-        });
+        if (count === 1) {
+          announce(message, () => {
+            void api('assets.update', { body: { ids: body.ids, isTrashed: false } }).then(() =>
+              refreshLibrary(queryClient),
+            );
+          });
+        } else {
+          announce(message);
+        }
       } else if (body.isTrashed === false) {
         announce(count === 1 ? 'Restored' : `Restored ${count}`);
       } else if (body.isFavorite === true) {

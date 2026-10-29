@@ -34,7 +34,11 @@ export async function similarAssetIds(
     order by asset_embeddings.embedding <=> ${literal}::vector
     limit ${limit}
   `);
-  const records = Array.isArray(result) ? result : [];
+  const records = Array.isArray(result)
+    ? result
+    : result && typeof result === 'object' && 'rows' in result && Array.isArray(result.rows)
+      ? result.rows
+      : [];
   return records.flatMap((row) => {
     const id = (row as { id?: unknown }).id;
     return typeof id === 'string' ? [id] : [];
