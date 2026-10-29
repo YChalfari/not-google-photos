@@ -8,7 +8,7 @@ import { EmptyState, ErrorState, Field, FormError, LoadingBlock, Page } from '@/
 import { useStatus } from '@/lib/status';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogClose,
@@ -53,15 +53,10 @@ export function AlbumsPage() {
   }
 
   return (
-    <Page
-      wide
-      title="Albums"
-      lede="Group photos and share them with other people on this server. The photos stay in each person's library."
-    >
+    <Page wide title="Albums">
       <Card>
         <CardHeader>
           <CardTitle>New album</CardTitle>
-          <CardDescription>Add photos afterward, from the library's Select button.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={onCreate}>
@@ -90,7 +85,7 @@ export function AlbumsPage() {
       {albums.data && albums.data.albums.length === 0 ? (
         <EmptyState
           title="No albums yet"
-          body="Create one above, then select photos in the library and add them."
+          body="Make one, then add photos from the library."
         />
       ) : null}
       {albums.data && albums.data.albums.length > 0 ? (
@@ -458,7 +453,7 @@ export function AlbumPage() {
                   );
                 }}
               >
-                <Field label="Invite someone on this server">
+                <Field label="Invite someone">
                   <select
                     name="userId"
                     className="h-10 rounded-md border border-input bg-card px-3 text-sm"
@@ -507,7 +502,7 @@ export function AlbumPage() {
           {photos.data && assets.length === 0 ? (
             <EmptyState
               title="No photos in this album"
-              body="Select photos in the library, then choose Add to album."
+              body="Add some from the library."
               action={
                 <Button asChild variant="outline">
                   <Link to="/">Go to the library</Link>

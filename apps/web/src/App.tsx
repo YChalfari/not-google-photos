@@ -42,7 +42,7 @@ export function App() {
             element={
               <PlaceholderPage
                 title="That page isn't here"
-                body="The library, settings, and admin pages are the ones that exist so far."
+                body="Head back to the library."
               />
             }
           />

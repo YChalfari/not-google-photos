@@ -19,11 +19,7 @@ export function PeoplePage() {
   });
 
   return (
-    <Page
-      title="People"
-      wide
-      lede="Each circle is one person's face, even in a group photo. Name someone once, and later photos of them join the same person."
-    >
+    <Page title="People" wide>
       {people.isPending ? <LoadingBlock label="Loading people" /> : null}
       {people.isError ? (
         <ErrorState
@@ -35,7 +31,7 @@ export function PeoplePage() {
       {people.data && people.data.people.length === 0 ? (
         <EmptyState
           title="No people yet"
-          body="Photos already in the library are scanned in the background. New uploads are scanned as they arrive. Birthday, party, cake, cat, and dog tags show up in Search."
+          body="They'll show up here."
         />
       ) : null}
       {people.data && people.data.people.length > 0 ? (
@@ -162,11 +158,7 @@ export function PersonPage() {
   }
 
   return (
-    <Page
-      title={person.data?.person.name ?? 'Unnamed'}
-      wide
-      lede="The circle is the face you are naming. Open a group photo and click that face if the wrong person was grouped here."
-    >
+    <Page title={person.data?.person.name ?? 'Unnamed'} wide>
       <p>
         <Link to="/people" className="text-sm text-primary underline-offset-4 hover:underline">
           All people
@@ -253,11 +245,7 @@ export function PersonPage() {
           }}
         >
           <div>
-            <p className="text-sm font-medium">Merge with someone</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Select every matching face, including several at once. They join this person. If one
-              of them already has a name, everyone joins that person, and that person's photo stays.
-            </p>
+            <p className="text-sm font-medium">Same person twice?</p>
           </div>
           <div
             className="grid max-h-64 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6 md:grid-cols-8"
@@ -323,7 +311,7 @@ export function PersonPage() {
         />
       ) : null}
       {photos.data && photos.data.items.length === 0 ? (
-        <EmptyState title="No photos" body="Faces grouped with this person will show up here." />
+        <EmptyState title="No photos" body="Nothing here yet." />
       ) : null}
       {photos.data && photos.data.items.length > 0 ? (
         <div ref={photosRef} className="flex flex-col gap-3">

@@ -137,7 +137,7 @@ export function DeleteBackedUpCard({
         {backedUp === 0 ? (
           <p className="text-sm text-muted-foreground">
             {pending > 0
-              ? 'These photos have not been confirmed with the server yet. Back up now checks them immediately. Refresh only reloads these numbers.'
+              ? "These aren't in the library yet. Back up now to finish them."
               : 'Nothing backed up is still on this phone.'}
           </p>
         ) : null}
@@ -155,8 +155,8 @@ export function DeleteBackedUpCard({
           <DialogTitle>Delete backed-up photos from this phone?</DialogTitle>
           <DialogDescription>
             {summary && summary.count > 0
-              ? 'This permanently deletes every photo and video on this phone that is already in your library, including favorites and photos from today. Your library keeps its copies. Photos and videos that are still waiting to upload remain on the phone. Android then asks you to allow the deletion.'
-              : 'Checked your library before deleting anything from this phone.'}
+              ? 'This deletes them from the phone, including favorites and photos from today. They stay in your library. Anything not uploaded yet stays on the phone. Android will ask before it deletes them.'
+              : 'Checked the library first. Nothing on this phone will be deleted yet.'}
           </DialogDescription>
           {summary ? <p className="mt-4 text-sm">{describeSummary(summary)}</p> : null}
           {outcome ? <p className="mt-4 text-sm">{describeOutcome(outcome)}</p> : null}

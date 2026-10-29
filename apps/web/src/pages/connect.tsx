@@ -69,10 +69,7 @@ export function ConnectPage() {
       <Card>
         <CardHeader>
           <CardTitle>Connect this phone</CardTitle>
-          <CardDescription>
-            Scan the pairing code from Settings on a computer that's already signed in. The phone
-            keeps its own key for uploads and for opening the library.
-          </CardDescription>
+          <CardDescription>Scan the code from Settings on a computer that's signed in.</CardDescription>
         </CardHeader>
         <CardContent>
           <form
@@ -84,7 +81,7 @@ export function ConnectPage() {
           >
             <Field
               label="Home address"
-              hint="The server on your home network. Plain HTTP is fine there."
+              hint="On your home network."
             >
               <Input
                 name="homeUrl"
@@ -96,7 +93,7 @@ export function ConnectPage() {
                 onChange={(event) => setHomeUrl(event.target.value)}
               />
             </Field>
-            <Field label="Away address" hint="Optional. Tailscale or your own HTTPS address.">
+            <Field label="Away address" hint="Optional. For away from home.">
               <Input
                 name="remoteUrl"
                 type="url"
@@ -131,7 +128,7 @@ export function ConnectPage() {
                     .then((result) => {
                       const parsed = parsePairingUri(result.value);
                       if (!parsed) {
-                        setError('That QR code is not a pairing code.');
+                        setError("That isn't a pairing code.");
                         return;
                       }
                       if (parsed.homeUrl) setHomeUrl(parsed.homeUrl);
@@ -163,7 +160,7 @@ export function ConnectPage() {
             <ul className="mt-4 flex flex-col gap-2 text-sm">
               {servers.length === 0 ? (
                 <li className="text-muted-foreground">
-                  No Not Google Photos server announced itself.
+                  Couldn't find one on this network.
                 </li>
               ) : (
                 servers.map((server) => (

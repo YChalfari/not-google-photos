@@ -62,7 +62,7 @@ export function AddToAlbumButton({
           ) : null}
           {albums.data && choices.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              You do not have an album you can add to yet.{' '}
+              No albums yet.{' '}
               <Link
                 to="/albums"
                 className="text-primary underline-offset-4 hover:underline"

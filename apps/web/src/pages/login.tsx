@@ -39,10 +39,7 @@ export function LoginPage() {
       <Card>
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
-          <CardDescription>
-            {info ? `${info.name}. ` : ''}
-            Phones don't use this page — they scan the pairing code in Settings.
-          </CardDescription>
+          {info ? <CardDescription>{info.name}</CardDescription> : null}
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={onSubmit}>

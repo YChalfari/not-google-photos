@@ -92,14 +92,10 @@ export function SettingsPage() {
   }
 
   return (
-    <Page
-      title="Settings"
-      lede="Your account, how much of the drive you use, and the phones that can upload."
-    >
+    <Page title="Settings">
       <Card>
         <CardHeader>
           <CardTitle>Appearance</CardTitle>
-          <CardDescription>Dark is the default. Light stays on this device.</CardDescription>
         </CardHeader>
         <CardContent>
           <ThemeSwitch />
@@ -110,7 +106,7 @@ export function SettingsPage() {
         <CardHeader>
           <CardTitle>Profile</CardTitle>
           <CardDescription>
-            Signed in as {me?.user.role === 'admin' ? 'an admin' : 'a member'}.
+            {me?.user.role === 'admin' ? "You're an admin." : "You're a member."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -137,7 +133,7 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Password</CardTitle>
-          <CardDescription>Other browsers you're signed in on will be signed out.</CardDescription>
+          <CardDescription>This signs you out of other browsers.</CardDescription>
         </CardHeader>
         <CardContent>
           <form
@@ -179,10 +175,6 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Storage</CardTitle>
-          <CardDescription>
-            Originals are counted in full for you, even when the same file is also in someone else's
-            library.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {storage.isPending ? <LoadingBlock label="Loading storage" /> : null}
@@ -215,7 +207,7 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Devices</CardTitle>
-          <CardDescription>Revoking a phone stops its uploads immediately.</CardDescription>
+          <CardDescription>Revoking a phone stops its uploads.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {devices.isPending ? <LoadingBlock label="Loading devices" /> : null}
@@ -224,7 +216,7 @@ export function SettingsPage() {
           ) : null}
           {devices.data && devices.data.devices.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No phones paired yet. Show a code above.
+              No phones paired yet.
             </p>
           ) : null}
           {devices.data?.devices.map((device) => (
@@ -271,8 +263,7 @@ export function SettingsPage() {
                   <DialogContent>
                     <DialogTitle>Revoke {device.name}?</DialogTitle>
                     <DialogDescription>
-                      Its token stops working immediately. Pair it again if you still want it to
-                      upload.
+                      It will stop uploading. You can pair it again later.
                     </DialogDescription>
                     <div className="mt-6 flex justify-end gap-2">
                       <DialogClose asChild>
@@ -303,9 +294,7 @@ export function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>This phone</CardTitle>
-            <CardDescription>
-              Unpairing revokes this phone's key. It stops uploading until you pair it again.
-            </CardDescription>
+            <CardDescription>This phone will stop uploading until you pair it again.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-start gap-3">
             <FormError error={unpairError} />
@@ -336,9 +325,7 @@ export function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Sign out</CardTitle>
-            <CardDescription>
-              This browser's session ends. Paired phones keep uploading.
-            </CardDescription>
+            <CardDescription>Phones keep uploading.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-start gap-3">
             <FormError error={signOutError} />
@@ -416,10 +403,7 @@ function PairingCard() {
     <Card>
       <CardHeader>
         <CardTitle>Pair a phone</CardTitle>
-        <CardDescription>
-          The phone app scans this code, learns the server address, and gets a device token for you.
-          It expires in 10 minutes and works once.
-        </CardDescription>
+        <CardDescription>Scan this with the phone app. It lasts 10 minutes and works once.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {!created ? (

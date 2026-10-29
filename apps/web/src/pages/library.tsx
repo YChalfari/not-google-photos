@@ -102,7 +102,6 @@ export function LibraryPage() {
     <Page
       wide
       title={me ? `${me.user.name}'s library` : 'Library'}
-      lede="Photos you add here stay on this machine. Months load as you scroll."
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1">
@@ -199,8 +198,8 @@ export function LibraryPage() {
           title={scope === 'library' ? 'No photos yet' : `Nothing in ${scope}`}
           body={
             scope === 'library'
-              ? 'Add photos from this computer, or pair a phone from Settings. They stay on this machine.'
-              : 'Photos you favorite, archive, or trash show up in these views.'
+              ? 'Add some from this computer, or pair a phone in Settings.'
+              : 'Nothing here yet.'
           }
           action={
             scope === 'library' ? (

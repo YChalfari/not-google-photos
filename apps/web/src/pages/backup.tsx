@@ -41,7 +41,7 @@ export function BackupPage() {
     return (
       <Page
         title="Backup"
-        lede="The camera roll is backed up by the Android app. This browser can upload files you pick, and it can show a pairing code under Settings."
+        lede="Backup runs on the phone. Pair one from Settings."
       />
     );
   }
@@ -145,10 +145,7 @@ function PhoneBackup() {
   }, [readyToRun, busy]);
 
   return (
-    <Page
-      title="Backup"
-      lede="This phone keeps its own queue and uploads when the schedule says so, even if the app is closed."
-    >
+    <Page title="Backup">
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-3">
           <div>
@@ -238,8 +235,8 @@ function PhoneBackup() {
         <CardHeader>
           <CardTitle>Run</CardTitle>
           <CardDescription>
-            New photos wait about a minute, then an hourly pass runs. {olderPhotoWait(requireCharging)}{' '}
-            Back up now starts that upload immediately.
+            New photos wait about a minute, then upload about once an hour. Back up now starts right
+            away.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -329,7 +326,7 @@ function PhoneBackup() {
             </ul>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            A checked folder covers its subfolders. At least one folder stays selected.
+            A checked folder includes its subfolders. At least one stays checked.
           </p>
           <FormError error={error ?? statusQuery.error ?? settingsQuery.error ?? permissionsQuery.error} />
         </CardContent>
@@ -354,29 +351,27 @@ function olderPhotoWait(requireCharging: boolean): string {
 }
 
 const ACTION_NOTE: Record<string, string> = {
-  sync: 'Backup started. The queue changes to Hashing while it reads the photos.',
-  retry: 'Failed photos were queued again.',
+  sync: 'Backup started.',
+  retry: 'Trying the failed ones again.',
   schedule: 'Schedule saved.',
-  charging: 'Saved. Older photos start when this phone is on Wi-Fi.',
-  permissions: 'Permission request finished.',
-  battery: 'Battery settings opened.',
+  charging: 'Saved.',
+  permissions: 'Done.',
+  battery: 'Opened battery settings.',
   folders: 'Folders loaded.',
-  refresh: 'Queue reloaded.',
+  refresh: 'Updated.',
 };
 
 function describe(status: SyncStatus, requireCharging: boolean): string {
   const waiting =
     status.waitingFor === 'firstBackup'
-      ? `${olderPhotoWait(requireCharging)} Back up now checks them against the server immediately. Refresh only reloads these numbers. `
+      ? `${olderPhotoWait(requireCharging)} `
       : status.waitingFor
         ? `Waiting for ${WAITING[status.waitingFor]}. `
         : '';
   const phase = PHASE[status.phase];
-  const paired = status.configured ? 'Paired with a server.' : 'No server paired yet.';
+  const paired = status.configured ? 'Connected.' : 'Not paired yet.';
   const first = status.firstBackup.complete
     ? ''
-    : status.phase === 'idle'
-      ? ` ${status.firstBackup.remaining} older photos are still waiting.`
-      : ` First backup still has ${status.firstBackup.remaining} older items.`;
+    : ` ${status.firstBackup.remaining} older photos are still waiting.`;
   return `${phase}. ${waiting}${paired}${first}`;
 }

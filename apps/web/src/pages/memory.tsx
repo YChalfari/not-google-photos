@@ -44,7 +44,7 @@ export function MemoryPage() {
     <Page
       wide
       title={detail?.title ?? 'Memory'}
-      lede={detail ? (detail.subtitle ?? undefined) : 'Photos from this day in earlier years.'}
+      lede={detail?.subtitle ?? undefined}
     >
       <p>
         <Link to="/" className="text-sm text-primary underline-offset-4 hover:underline">
@@ -62,7 +62,7 @@ export function MemoryPage() {
       {detail && detail.assets.length === 0 ? (
         <EmptyState
           title="Nothing left in this memory"
-          body="The photos were removed from your library."
+          body="Those photos aren't in your library anymore."
         />
       ) : null}
       {detail && detail.assets.length > 0 ? (

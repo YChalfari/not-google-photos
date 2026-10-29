@@ -34,8 +34,7 @@ export function SetupPage() {
           <CardHeader>
             <CardTitle>Set up on a computer</CardTitle>
             <CardDescription>
-              Finish first-run setup in a browser on the home computer. Then come back and pair this
-              phone.
+              Set this up in a browser on the computer first. Then come back and pair this phone.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -65,10 +64,7 @@ export function SetupPage() {
       <Card>
         <CardHeader>
           <CardTitle>Set up this library</CardTitle>
-          <CardDescription>
-            Nobody has an account yet. Create the admin — that's you — and give the server a name
-            your family will recognize.
-          </CardDescription>
+          <CardDescription>Create the first account. You'll be the admin.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={onSubmit}>
@@ -80,7 +76,7 @@ export function SetupPage() {
             </Field>
             <Field
               label="Password"
-              hint="At least 8 characters. Everyone else sets their own from an invite."
+              hint="At least 8 characters."
             >
               <Input
                 name="password"
@@ -90,12 +86,12 @@ export function SetupPage() {
                 minLength={8}
               />
             </Field>
-            <Field label="Server name" hint="Shown on phones when they pair. Optional.">
+            <Field label="Server name" hint="Optional. This is the name phones see.">
               <Input name="serverName" placeholder={info.name} maxLength={80} />
             </Field>
             <FormError error={setup.error} />
             <Button type="submit" disabled={setup.isPending}>
-              {setup.isPending ? 'Creating the admin…' : 'Create the admin account'}
+              {setup.isPending ? 'Creating…' : 'Create account'}
             </Button>
           </form>
         </CardContent>

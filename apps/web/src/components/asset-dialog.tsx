@@ -572,11 +572,11 @@ function FaceEditor({
           to={`/people/${personId}`}
           className="text-sm text-primary underline-offset-4 hover:underline"
         >
-          Open this person
+          Their photos
         </Link>
       ) : null}
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">Move only this face to</p>
+        <p className="text-sm font-medium">Move this face</p>
         {(people.data?.people.length ?? 0) > 8 ? (
           <Input
             aria-label="Filter people"
@@ -586,12 +586,12 @@ function FaceEditor({
           />
         ) : null}
         {choices.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No one else to move this face to.</p>
+          <p className="text-sm text-muted-foreground">No one else yet.</p>
         ) : (
           <div
             className="grid max-h-40 grid-cols-4 gap-2 overflow-y-auto"
             role="group"
-            aria-label="Move only this face to"
+            aria-label="Move this face"
           >
             {choices.map((person) => (
               <button

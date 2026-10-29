@@ -95,17 +95,13 @@ export function AdminPage() {
   }
 
   return (
-    <Page
-      title="Admin"
-      lede="People on this server, the links you send them, and the addresses phones should use."
-    >
+    <Page title="Admin">
       <Card>
         <CardHeader>
           <CardTitle>Server</CardTitle>
           <CardDescription>
-            The home address goes into pairing codes. Leave a field blank to fall back to the
-            environment.
-            {server.data ? ` Library: ${server.data.library.message}` : ''}
+            Leave a field blank to keep what's already set.
+            {server.data ? ` ${server.data.library.message}` : ''}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -134,7 +130,7 @@ export function AdminPage() {
               </Field>
               <Field
                 label="Remote address"
-                hint="Optional HTTPS address for away from home. See the README."
+                hint="Optional. For when a phone is away from home."
               >
                 <Input
                   name="remoteUrl"
@@ -155,9 +151,7 @@ export function AdminPage() {
       <Card>
         <CardHeader>
           <CardTitle>People</CardTitle>
-          <CardDescription>
-            Quotas are optional. Disabling an account signs it out everywhere.
-          </CardDescription>
+          <CardDescription>Disabling someone signs them out.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {users.isPending ? <LoadingBlock label="Loading people" /> : null}
@@ -239,16 +233,14 @@ export function AdminPage() {
       <Card>
         <CardHeader>
           <CardTitle>Invites</CardTitle>
-          <CardDescription>
-            Send a link. The person sets their own password. The token is shown once.
-          </CardDescription>
+          <CardDescription>They choose their own password. The link is shown once.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <form className="grid gap-3 sm:grid-cols-2" onSubmit={onInvite}>
-            <Field label="Name" hint="Pre-fills the form. Optional.">
+            <Field label="Name" hint="Optional.">
               <Input name="name" maxLength={80} />
             </Field>
-            <Field label="Email" hint="Lock the invite to this address. Optional.">
+            <Field label="Email" hint="Optional. Only this address can use the invite.">
               <Input name="email" type="email" />
             </Field>
             <Field label="Role">
@@ -367,7 +359,7 @@ function QuotaButton({
         inputMode="decimal"
         value={value}
         onChange={(event) => setValue(event.target.value)}
-        placeholder="GB, blank for none"
+        placeholder="Gigabytes, or blank for none"
         className="h-8 w-36"
       />
       <Button size="sm" type="submit">

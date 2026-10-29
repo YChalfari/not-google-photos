@@ -61,7 +61,6 @@ export function SearchPage() {
     <Page
       title="Search"
       wide
-      lede="Find a person, a birthday, a party, a cake, a cat, or a dog. Recognition stays on this computer."
     >
       <form
         className="flex flex-col gap-3"
@@ -75,7 +74,7 @@ export function SearchPage() {
           <Input
             aria-label="Search"
             value={draft}
-            placeholder="Maya, cake, cats, birthday…"
+            placeholder="Name, place, or thing"
             onChange={(event) => setDraft(event.target.value)}
           />
           <Button type="submit">Search</Button>
@@ -131,7 +130,7 @@ export function SearchPage() {
             <ErrorState title="Couldn't search" error={results.error} onRetry={() => void results.refetch()} />
           ) : null}
           {results.data && results.data.items.length === 0 ? (
-            <EmptyState title="Nothing matched" body="Try a person, cake, cats, dogs, birthday, or party." />
+            <EmptyState title="Nothing matched" body="Try another search." />
           ) : null}
           {results.data && results.data.items.length > 0 ? (
             <PhotoGrid assets={results.data.items} onOpen={viewer.open} />

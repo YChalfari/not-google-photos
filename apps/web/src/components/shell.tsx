@@ -132,7 +132,6 @@ function Brand({ name }: { name: string | undefined }) {
       </span>
       <div className="min-w-0">
         <p className="truncate font-serif text-lg leading-none">{name ?? 'Not Google Photos'}</p>
-        <p className="mt-1 text-xs text-muted-foreground">Your library, at home</p>
       </div>
     </div>
   );

@@ -65,7 +65,7 @@ export function InvitePage() {
           <CardTitle>Join {lookup.data.serverName}</CardTitle>
           <CardDescription>
             {invite.invitedBy ? `${invite.invitedBy} invited you. ` : ''}
-            Choose a password only you know. This link expires {formatWhen(invite.expiresAt)}.
+            Pick a password. This link expires {formatWhen(invite.expiresAt)}.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -81,7 +81,7 @@ export function InvitePage() {
             </Field>
             <Field
               label="Email"
-              hint={invite.email ? 'This invite is locked to this address.' : undefined}
+              hint={invite.email ? 'This invite is for this email.' : undefined}
             >
               <Input
                 name="email"
