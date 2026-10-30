@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { parsePairingUri } from '@ngp/shared';
 import { GuestFrame } from '@/components/shell';
-import { Field, FormError, LoadingBlock } from '@/components/states';
+import { LoadingScreen } from '@/components/loading-screen';
+import { Field, FormError } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -43,7 +44,7 @@ export function ConnectPage() {
       .catch(() => undefined);
   }, []);
 
-  if (!ready) return <LoadingBlock label="Checking this phone" />;
+  if (!ready) return <LoadingScreen label="Checking this phone" />;
   if (!usesDeviceAuth()) return <Navigate to="/login" replace />;
   if (paired) return <Navigate to={destination(location.state)} replace />;
 
@@ -69,7 +70,9 @@ export function ConnectPage() {
       <Card>
         <CardHeader>
           <CardTitle>Connect this phone</CardTitle>
-          <CardDescription>Scan the code from Settings on a computer that's signed in.</CardDescription>
+          <CardDescription>
+            Scan the code from Settings on a computer that's signed in.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form
@@ -79,10 +82,7 @@ export function ConnectPage() {
               void pair({ code, homeUrl, remoteUrl });
             }}
           >
-            <Field
-              label="Home address"
-              hint="On your home network."
-            >
+            <Field label="Home address" hint="On your home network.">
               <Input
                 name="homeUrl"
                 type="url"
@@ -159,9 +159,7 @@ export function ConnectPage() {
           {servers ? (
             <ul className="mt-4 flex flex-col gap-2 text-sm">
               {servers.length === 0 ? (
-                <li className="text-muted-foreground">
-                  Couldn't find one on this network.
-                </li>
+                <li className="text-muted-foreground">Couldn't find one on this network.</li>
               ) : (
                 servers.map((server) => (
                   <li key={`${server.host}:${server.port}`} className="flex items-center gap-2">

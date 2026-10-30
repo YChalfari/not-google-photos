@@ -2,7 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { FormEvent } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { GuestFrame } from '@/components/shell';
-import { ErrorState, Field, FormError, LoadingBlock } from '@/components/states';
+import { LoadingScreen } from '@/components/loading-screen';
+import { ErrorState, Field, FormError } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -22,7 +23,7 @@ export function SetupPage() {
     },
   });
 
-  if (!ready) return <LoadingBlock label="Checking the server" />;
+  if (!ready) return <LoadingScreen label="Checking the server" />;
   if (deviceAuth && !paired) return <Navigate to="/connect" replace />;
   if (infoError || !info)
     return <ErrorState title="The server is not answering" error={infoError} />;
@@ -74,10 +75,7 @@ export function SetupPage() {
             <Field label="Email">
               <Input name="email" type="email" autoComplete="username" required />
             </Field>
-            <Field
-              label="Password"
-              hint="At least 8 characters."
-            >
+            <Field label="Password" hint="At least 8 characters.">
               <Input
                 name="password"
                 type="password"

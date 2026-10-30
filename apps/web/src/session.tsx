@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { LoadingBlock } from '@/components/states';
+import { LoadingScreen } from '@/components/loading-screen';
 import { ApiClientError, api } from '@/lib/api';
 import {
   clearDeviceConnection,
@@ -77,18 +77,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 export function RequireAuth() {
   const location = useLocation();
   const { info, me, ready, infoError, meError, deviceAuth, paired } = useSession();
-  if (!ready) return <LoadingBlock label="Checking your session" />;
+  if (!ready) return <LoadingScreen label="Checking your session" />;
   if (deviceAuth && !paired) {
     return <Navigate to="/connect" replace state={{ from: location.pathname }} />;
   }
   if (infoError || !info) {
     return (
-      <div className="mx-auto max-w-md px-6 py-16">
-        <LoadingBlock label="Waiting for the server" />
-        <p className="mt-4 text-sm text-muted-foreground">
-          {infoError instanceof Error ? infoError.message : 'The server is not answering.'}
-        </p>
-      </div>
+      <LoadingScreen
+        label="Waiting for the server"
+        note={infoError instanceof Error ? infoError.message : 'The server is not answering.'}
+      />
     );
   }
   if (info.setupRequired) return <Navigate to="/setup" replace />;
@@ -119,7 +117,7 @@ export function RequireAdmin() {
 
 export function GuestOnly() {
   const { info, me, ready, deviceAuth, paired } = useSession();
-  if (!ready) return <LoadingBlock label="Checking your session" />;
+  if (!ready) return <LoadingScreen label="Checking your session" />;
   if (deviceAuth) return <Navigate to={paired ? '/' : '/connect'} replace />;
   if (info?.setupRequired) return <Navigate to="/setup" replace />;
   if (me) return <Navigate to="/" replace />;

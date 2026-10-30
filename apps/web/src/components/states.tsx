@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { LoadingScreen } from '@/components/loading-screen';
 import { Button } from '@/components/ui/button';
 import { errorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -26,14 +27,7 @@ export function Page({
 }
 
 export function LoadingBlock({ label = 'Loading' }: { label?: string }) {
-  return (
-    <div className="flex flex-col gap-3" role="status" aria-live="polite">
-      <span className="sr-only">{label}</span>
-      <div className="h-8 w-40 animate-pulse rounded-md bg-secondary" />
-      <div className="h-28 animate-pulse rounded-xl bg-secondary" />
-      <div className="h-28 animate-pulse rounded-xl bg-secondary" />
-    </div>
-  );
+  return <LoadingScreen label={label} fill={false} />;
 }
 
 export function EmptyState({

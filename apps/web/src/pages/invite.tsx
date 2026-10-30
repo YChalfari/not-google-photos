@@ -2,7 +2,8 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import type { FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { GuestFrame } from '@/components/shell';
-import { ErrorState, Field, FormError, LoadingBlock } from '@/components/states';
+import { LoadingScreen } from '@/components/loading-screen';
+import { ErrorState, Field, FormError } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -32,7 +33,7 @@ export function InvitePage() {
 
   if (!token)
     return <ErrorState title="This invite link is incomplete" error={new Error('Missing token')} />;
-  if (lookup.isPending) return <LoadingBlock label="Checking the invite" />;
+  if (lookup.isPending) return <LoadingScreen label="Checking the invite" />;
   if (lookup.isError) {
     return (
       <GuestFrame>
@@ -79,10 +80,7 @@ export function InvitePage() {
                 maxLength={80}
               />
             </Field>
-            <Field
-              label="Email"
-              hint={invite.email ? 'This invite is for this email.' : undefined}
-            >
+            <Field label="Email" hint={invite.email ? 'This invite is for this email.' : undefined}>
               <Input
                 name="email"
                 type="email"
