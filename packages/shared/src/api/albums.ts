@@ -42,6 +42,8 @@ export const AlbumRule = z
     userId: Id,
     person: z.object({ id: Id, name: z.string().nullable() }),
     startDate: LocalDate.nullable(),
+    /** Include this person only when someone else linked to the album is in the photo. */
+    together: z.boolean(),
   })
   .meta({ id: 'AlbumRule' });
 
@@ -216,10 +218,27 @@ export const albumEndpoints = defineEndpoints({
     tag: 'albums',
     summary: 'Link one of your own people to a live album, optionally from a start date',
     params: AlbumParams,
-    body: z.object({ personId: Id, startDate: LocalDate.optional() }),
+    body: z.object({
+      personId: Id,
+      startDate: LocalDate.optional(),
+      /** Skip photos of this person unless someone else linked here is in them too. */
+      together: z.boolean().optional(),
+    }),
     response: z.object({ rule: AlbumRule }),
     successStatus: 201,
     errors: ['not_found', 'forbidden', 'conflict'],
+    stability: 'draft',
+  },
+  'albums.rules.update': {
+    method: 'PATCH',
+    path: '/api/albums/:id/rules/:ruleId',
+    auth: 'user',
+    tag: 'albums',
+    summary: 'Choose whether a linked person is included alone or only with someone else',
+    params: z.object({ id: Id, ruleId: Id }),
+    body: z.object({ together: z.boolean() }),
+    response: z.object({ rule: AlbumRule }),
+    errors: ['not_found', 'forbidden'],
     stability: 'draft',
   },
   'albums.rules.remove': {

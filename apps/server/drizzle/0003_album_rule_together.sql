@@ -1,0 +1,1 @@
+ALTER TABLE "album_rules" ADD COLUMN "together" boolean DEFAULT false NOT NULL;

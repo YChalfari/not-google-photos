@@ -165,4 +165,107 @@ describe('live albums', () => {
       .where(eq(assets.id, recent.id));
     expect(stillThere).toHaveLength(1);
   });
+
+  it('includes someone only when another person in the album is with them', async () => {
+    const alex = await createUser(t.ctx, { email: 'alex-together@example.com', name: 'Alex' });
+    const browser = await signIn(t.app, alex.email);
+    const me = await insertPerson(t.ctx, alex.id, 'Alex');
+    const wife = await insertPerson(t.ctx, alex.id, 'Sam');
+    const kid = await insertPerson(t.ctx, alex.id, 'Max');
+    const stranger = await insertPerson(t.ctx, alex.id, 'Pat');
+    const alone = await insertAsset(t.ctx, alex.id);
+    const withWife = await insertAsset(t.ctx, alex.id);
+    const withStranger = await insertAsset(t.ctx, alex.id);
+    const wifeAlone = await insertAsset(t.ctx, alex.id);
+    const kidAlone = await insertAsset(t.ctx, alex.id);
+    const kidWithMe = await insertAsset(t.ctx, alex.id);
+    const ignoredCompany = await insertAsset(t.ctx, alex.id);
+    await insertFace(t.ctx, { assetId: alone.id, ownerId: alex.id, personId: me.id });
+    await insertFace(t.ctx, { assetId: withWife.id, ownerId: alex.id, personId: me.id });
+    await insertFace(t.ctx, { assetId: withWife.id, ownerId: alex.id, personId: wife.id });
+    await insertFace(t.ctx, { assetId: withStranger.id, ownerId: alex.id, personId: me.id });
+    await insertFace(t.ctx, { assetId: withStranger.id, ownerId: alex.id, personId: stranger.id });
+    await insertFace(t.ctx, { assetId: wifeAlone.id, ownerId: alex.id, personId: wife.id });
+    await insertFace(t.ctx, { assetId: kidAlone.id, ownerId: alex.id, personId: kid.id });
+    await insertFace(t.ctx, { assetId: kidWithMe.id, ownerId: alex.id, personId: kid.id });
+    await insertFace(t.ctx, { assetId: kidWithMe.id, ownerId: alex.id, personId: me.id });
+    await insertFace(t.ctx, { assetId: ignoredCompany.id, ownerId: alex.id, personId: me.id });
+    const ignored = await insertFace(t.ctx, {
+      assetId: ignoredCompany.id,
+      ownerId: alex.id,
+      personId: wife.id,
+    });
+    await t.ctx.db.update(faces).set({ ignored: true }).where(eq(faces.id, ignored.id));
+
+    const album = await insertAlbum(t.ctx, alex.id, 'Family');
+    const addedKid = await browser.call('albums.rules.add', {
+      params: { id: album.id },
+      body: { personId: kid.id },
+    });
+    expect(addedKid.status, JSON.stringify(addedKid.error)).toBe(201);
+    expect(addedKid.data.rule.together).toBe(false);
+
+    const kidPhotos = await browser.call('albums.assets', { params: { id: album.id } });
+    expect(kidPhotos.data.items.map((item) => item.id).sort()).toEqual(
+      [kidAlone.id, kidWithMe.id].sort(),
+    );
+
+    const addedMe = await browser.call('albums.rules.add', {
+      params: { id: album.id },
+      body: { personId: me.id, together: true },
+    });
+    expect(addedMe.status, JSON.stringify(addedMe.error)).toBe(201);
+    expect(addedMe.data.rule.together).toBe(true);
+    const withMe = await browser.call('albums.assets', { params: { id: album.id } });
+    expect(withMe.data.items.map((item) => item.id).sort()).toEqual(
+      [kidAlone.id, kidWithMe.id].sort(),
+    );
+
+    const addedWife = await browser.call('albums.rules.add', {
+      params: { id: album.id },
+      body: { personId: wife.id },
+    });
+    expect(addedWife.status).toBe(201);
+    const withWifeRule = await browser.call('albums.assets', { params: { id: album.id } });
+    expect(withWifeRule.data.items.map((item) => item.id).sort()).toEqual(
+      [kidAlone.id, kidWithMe.id, wifeAlone.id, withWife.id].sort(),
+    );
+
+    const later = await insertAsset(t.ctx, alex.id);
+    await insertFace(t.ctx, { assetId: later.id, ownerId: alex.id, personId: me.id });
+    await insertFace(t.ctx, { assetId: later.id, ownerId: alex.id, personId: wife.id });
+    await syncAlbumRulesForAsset(t.ctx.db, later.id);
+    const afterSync = await browser.call('albums.assets', { params: { id: album.id } });
+    expect(afterSync.data.items.map((item) => item.id)).toContain(later.id);
+
+    const opened = await browser.call('albums.rules.update', {
+      params: { id: album.id, ruleId: addedMe.data.rule.id },
+      body: { together: false },
+    });
+    expect(opened.status, JSON.stringify(opened.error)).toBe(200);
+    const allOfMe = await browser.call('albums.assets', { params: { id: album.id } });
+    const allIds = allOfMe.data.items.map((item) => item.id);
+    expect(allIds).toEqual(
+      expect.arrayContaining([alone.id, withStranger.id, ignoredCompany.id, withWife.id]),
+    );
+
+    const closed = await browser.call('albums.rules.update', {
+      params: { id: album.id, ruleId: addedMe.data.rule.id },
+      body: { together: true },
+    });
+    expect(closed.status).toBe(200);
+    const tightened = await browser.call('albums.assets', { params: { id: album.id } });
+    expect(tightened.data.items.map((item) => item.id).sort()).toEqual(
+      [kidAlone.id, kidWithMe.id, wifeAlone.id, withWife.id, later.id].sort(),
+    );
+
+    const removedWife = await browser.call('albums.rules.remove', {
+      params: { id: album.id, ruleId: addedWife.data.rule.id },
+    });
+    expect(removedWife.status).toBe(204);
+    const withoutWife = await browser.call('albums.assets', { params: { id: album.id } });
+    expect(withoutWife.data.items.map((item) => item.id).sort()).toEqual(
+      [kidAlone.id, kidWithMe.id].sort(),
+    );
+  });
 });

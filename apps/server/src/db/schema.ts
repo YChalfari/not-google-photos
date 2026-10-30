@@ -511,6 +511,8 @@ export const albumRules = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     personId: uuid('person_id').notNull(),
     startDate: date('start_date', { mode: 'string' }),
+    /** A photo counts only when someone else linked to this album is in it too. */
+    together: boolean('together').notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [

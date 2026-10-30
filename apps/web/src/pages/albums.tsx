@@ -236,12 +236,23 @@ export function AlbumPage() {
     },
   });
   const addRule = useMutation({
-    mutationFn: (body: { personId: string; startDate?: string }) =>
+    mutationFn: (body: { personId: string; startDate?: string; together?: boolean }) =>
       api('albums.rules.add', { params: { id }, body }),
     onSuccess: async () => {
       announce('Added their photos');
       await invalidate();
       await queryClient.invalidateQueries({ queryKey: ['albums', id, 'suggestions'] });
+    },
+  });
+  const updateRule = useMutation({
+    mutationFn: (input: { ruleId: string; together: boolean }) =>
+      api('albums.rules.update', {
+        params: { id, ruleId: input.ruleId },
+        body: { together: input.together },
+      }),
+    onSuccess: async () => {
+      announce('Saved');
+      await invalidate();
     },
   });
   const removeRule = useMutation({
@@ -525,34 +536,60 @@ export function AlbumPage() {
                 <p className="text-sm text-muted-foreground">No one linked yet.</p>
               ) : (
                 <ul className="flex flex-col gap-2">
-                  {detail.rules.map((rule) => (
-                    <li
-                      key={rule.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
-                    >
-                      <p className="text-sm">
-                        {rule.person.name ?? 'Unnamed'}
-                        {rule.startDate ? ` from ${rule.startDate}` : ''}
-                      </p>
-                      {detail.role === 'owner' || rule.userId === selfId ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          pending={removeRule.isPending && removeRule.variables === rule.id}
-                          disabled={removeRule.isPending}
-                          onClick={() => removeRule.mutate(rule.id)}
-                        >
-                          Remove
-                        </Button>
-                      ) : null}
-                    </li>
-                  ))}
+                  {detail.rules.map((rule) => {
+                    const canChange = detail.role === 'owner' || rule.userId === selfId;
+                    return (
+                      <li
+                        key={rule.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                      >
+                        <div>
+                          <p className="text-sm">
+                            {rule.person.name ?? 'Unnamed'}
+                            {rule.startDate ? ` from ${rule.startDate}` : ''}
+                          </p>
+                          {canChange ? (
+                            <label className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                              <input
+                                type="checkbox"
+                                className="size-4 accent-primary"
+                                checked={rule.together}
+                                disabled={updateRule.isPending}
+                                onChange={(event) =>
+                                  updateRule.mutate({
+                                    ruleId: rule.id,
+                                    together: event.target.checked,
+                                  })
+                                }
+                              />
+                              Only with someone else in this album
+                            </label>
+                          ) : rule.together ? (
+                            <p className="text-sm text-muted-foreground">
+                              Only with someone else in this album
+                            </p>
+                          ) : null}
+                        </div>
+                        {canChange ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            pending={removeRule.isPending && removeRule.variables === rule.id}
+                            disabled={removeRule.isPending}
+                            onClick={() => removeRule.mutate(rule.id)}
+                          >
+                            Remove
+                          </Button>
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
               {canEditPhotos ? (
                 <form
-                  className="flex flex-col gap-3 sm:flex-row sm:items-end"
+                  className="flex flex-col gap-3"
                   onSubmit={(event) => {
                     event.preventDefault();
                     const form = event.currentTarget;
@@ -561,41 +598,51 @@ export function AlbumPage() {
                     if (!personId) return;
                     const startDate = formText(data, 'startDate');
                     addRule.mutate(
-                      { personId, ...(startDate ? { startDate } : {}) },
+                      {
+                        personId,
+                        ...(startDate ? { startDate } : {}),
+                        ...(data.get('together') === 'on' ? { together: true } : {}),
+                      },
                       { onSuccess: () => form.reset() },
                     );
                   }}
                 >
-                  <Field label="Add a person">
-                    <select
-                      name="personId"
-                      className="h-10 rounded-md border border-input bg-card px-3 text-sm"
-                      defaultValue=""
-                      required
-                    >
-                      <option value="" disabled>
-                        Choose
-                      </option>
-                      {(myPeople.data?.people ?? [])
-                        .filter(
-                          (person) =>
-                            !detail.rules.some(
-                              (rule) => rule.person.id === person.id && rule.userId === selfId,
-                            ),
-                        )
-                        .map((person) => (
-                          <option key={person.id} value={person.id}>
-                            {person.name ?? 'Unnamed'}
-                          </option>
-                        ))}
-                    </select>
-                  </Field>
-                  <Field label="From" hint="Optional.">
-                    <Input name="startDate" type="date" />
-                  </Field>
-                  <Button type="submit" pending={addRule.isPending} disabled={addRule.isPending}>
-                    {addRule.isPending ? 'Adding…' : 'Add their photos'}
-                  </Button>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <Field label="Add a person">
+                      <select
+                        name="personId"
+                        className="h-10 rounded-md border border-input bg-card px-3 text-sm"
+                        defaultValue=""
+                        required
+                      >
+                        <option value="" disabled>
+                          Choose
+                        </option>
+                        {(myPeople.data?.people ?? [])
+                          .filter(
+                            (person) =>
+                              !detail.rules.some(
+                                (rule) => rule.person.id === person.id && rule.userId === selfId,
+                              ),
+                          )
+                          .map((person) => (
+                            <option key={person.id} value={person.id}>
+                              {person.name ?? 'Unnamed'}
+                            </option>
+                          ))}
+                      </select>
+                    </Field>
+                    <Field label="From" hint="Optional.">
+                      <Input name="startDate" type="date" />
+                    </Field>
+                    <Button type="submit" pending={addRule.isPending} disabled={addRule.isPending}>
+                      {addRule.isPending ? 'Adding…' : 'Add their photos'}
+                    </Button>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="together" className="size-4 accent-primary" />
+                    Only with someone else in this album
+                  </label>
                   <FormError error={addRule.error} />
                 </form>
               ) : null}

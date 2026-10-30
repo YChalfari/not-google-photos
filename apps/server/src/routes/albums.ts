@@ -1,6 +1,6 @@
 import type { AlbumDetail, AlbumSummary } from '@ngp/shared';
 import { and, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
-import { applyAlbumRule, removeAlbumRuleLinks, suggestRulesForAlbum } from '../albums/rules';
+import { removeAlbumRuleLinks, resyncUserAlbumRules, suggestRulesForAlbum } from '../albums/rules';
 import { canViewAlbum, filterOwnedAssetIds } from '../authz/access';
 import type { AppContext } from '../context';
 import type { DbOrTx } from '../db/client';
@@ -210,6 +210,7 @@ async function albumDetail(ctx: AppContext, userId: string, albumId: string): Pr
             personId: people.id,
             personName: people.name,
             startDate: albumRules.startDate,
+            together: albumRules.together,
           })
           .from(albumRules)
           .innerJoin(people, eq(people.id, albumRules.personId))
@@ -227,6 +228,7 @@ async function albumDetail(ctx: AppContext, userId: string, albumId: string): Pr
     userId: rule.userId,
     person: { id: rule.personId, name: rule.personName },
     startDate: rule.startDate,
+    together: rule.together,
   }));
   return {
     ...toSummary(album, owner, view, counts.get(album.id) ?? 0, covers.get(album.id) ?? null),
@@ -575,24 +577,29 @@ export const albumHandlers: Handlers = {
       .where(and(eq(people.id, body.personId), eq(people.ownerId, auth.user.id)));
     if (!person) throw new ApiError('not_found', 'That person is not in your library');
     try {
-      const [rule] = await ctx.db
-        .insert(albumRules)
-        .values({
-          albumId: album.id,
-          userId: auth.user.id,
-          personId: person.id,
-          startDate: body.startDate ?? null,
-        })
-        .returning();
-      if (!rule) throw new ApiError('internal_error', 'Could not add that person');
-      await ctx.db.update(albums).set({ isLive: true }).where(eq(albums.id, album.id));
-      await applyAlbumRule(ctx.db, rule.id);
+      const rule = await ctx.db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(albumRules)
+          .values({
+            albumId: album.id,
+            userId: auth.user.id,
+            personId: person.id,
+            startDate: body.startDate ?? null,
+            together: body.together ?? false,
+          })
+          .returning();
+        if (!created) throw new ApiError('internal_error', 'Could not add that person');
+        await tx.update(albums).set({ isLive: true }).where(eq(albums.id, album.id));
+        await resyncUserAlbumRules(tx, album.id, auth.user.id);
+        return created;
+      });
       return {
         rule: {
           id: rule.id,
           userId: rule.userId,
           person: { id: person.id, name: person.name },
           startDate: rule.startDate,
+          together: rule.together,
         },
       };
     } catch (error) {
@@ -614,14 +621,53 @@ export const albumHandlers: Handlers = {
     if (!view.isOwner && rule.userId !== auth.user.id) {
       throw new ApiError('forbidden', 'Only the owner can remove a person someone else added');
     }
-    await removeAlbumRuleLinks(ctx.db, rule.id);
-    await ctx.db.delete(albumRules).where(eq(albumRules.id, rule.id));
-    const [left] = await ctx.db
-      .select({ id: albumRules.id })
+    await ctx.db.transaction(async (tx) => {
+      await removeAlbumRuleLinks(tx, rule.id);
+      await tx.delete(albumRules).where(eq(albumRules.id, rule.id));
+      await resyncUserAlbumRules(tx, album.id, rule.userId);
+      const [left] = await tx
+        .select({ id: albumRules.id })
+        .from(albumRules)
+        .where(eq(albumRules.albumId, album.id))
+        .limit(1);
+      if (!left) await tx.update(albums).set({ isLive: false }).where(eq(albums.id, album.id));
+    });
+  },
+
+  'albums.rules.update': async ({ ctx, auth, params, body }) => {
+    const { album, view } = await requireAlbum(ctx, auth.user.id, params.id);
+    if (!view.accepted) throw new ApiError('not_found', 'That album is not in your library');
+    const [existing] = await ctx.db
+      .select({
+        id: albumRules.id,
+        userId: albumRules.userId,
+        personId: people.id,
+        personName: people.name,
+        startDate: albumRules.startDate,
+      })
       .from(albumRules)
-      .where(eq(albumRules.albumId, album.id))
-      .limit(1);
-    if (!left) await ctx.db.update(albums).set({ isLive: false }).where(eq(albums.id, album.id));
+      .innerJoin(people, eq(people.id, albumRules.personId))
+      .where(and(eq(albumRules.id, params.ruleId), eq(albumRules.albumId, album.id)));
+    if (!existing) throw new ApiError('not_found', 'That person is not linked to this album');
+    if (!view.isOwner && existing.userId !== auth.user.id) {
+      throw new ApiError('forbidden', 'Only the owner can change a person someone else added');
+    }
+    await ctx.db.transaction(async (tx) => {
+      await tx
+        .update(albumRules)
+        .set({ together: body.together })
+        .where(eq(albumRules.id, existing.id));
+      await resyncUserAlbumRules(tx, album.id, existing.userId);
+    });
+    return {
+      rule: {
+        id: existing.id,
+        userId: existing.userId,
+        person: { id: existing.personId, name: existing.personName },
+        startDate: existing.startDate,
+        together: body.together,
+      },
+    };
   },
 
   'albums.ruleSuggestions': async ({ ctx, auth, params }) => {
