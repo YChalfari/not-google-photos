@@ -15,8 +15,8 @@ export function LoadingScreen({
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center gap-8 px-4 py-10',
-        fill && 'min-h-dvh pt-[max(2.5rem,env(safe-area-inset-top))]',
+        'flex flex-col items-center justify-center gap-8 overflow-hidden px-4',
+        fill ? 'fixed inset-0 z-10' : 'py-10',
       )}
       role="status"
       aria-live="polite"
