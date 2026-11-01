@@ -53,9 +53,8 @@ The next push to `main` publishes the release. Until the secrets exist, the work
 On the phone:
 
 1. Install [Obtainium](https://github.com/ImranR98/Obtainium).
-2. Open Obtainium's settings, then GitHub, and add a fine-grained personal access token that can read this private repository's contents.
-3. Add an app with the repository URL `https://github.com/<owner>/<repo>`.
-4. Set the APK filter to `app-release\.apk` if Obtainium does not select that asset on its own.
-5. Install, and leave Obtainium's background checks on.
+2. Add an app with the repository URL `https://github.com/YChalfari/not-google-photos`.
+3. Set the APK filter to `app-release\.apk` if Obtainium does not select that asset on its own.
+4. Install, and leave Obtainium's background checks on.
 
 Each new release shows the system install dialog. Stock Android does not install it silently. Keep the same keystore: a new one makes Android treat the APK as a different app.

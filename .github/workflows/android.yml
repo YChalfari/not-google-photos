@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/web/**'
       - 'apps/mobile/**'
+      - '!apps/mobile/**/*.md'
       - 'packages/photo-sync/**'
       - 'packages/shared/**'
       - '.github/workflows/android.yml'

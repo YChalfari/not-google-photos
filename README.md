@@ -2,7 +2,11 @@
 
 A self-hosted photo library for one household. Photos stay on a machine you control. Each person has their own account. Phones sign in by scanning a pairing code, and identical files are stored once even when two people both have them.
 
-Accounts, invites, sessions, device tokens, content-addressed storage, uploads, thumbnails, and the timeline are in place. Face grouping, albums, search, and memories are described in `GET /api/openapi.json` and answer **501** until their handlers exist.
+Your photos live in the library folder on disk. They are not part of this repository.
+
+The library, people, albums, search, memories, a local map, and trash are in the app. An album can add every photo of someone, or only the photos where they appear with someone else in that album. The map is drawn from local map files. It does not call a tile server. The Android app backs up a phone's camera roll. Video that a browser cannot play gets an H.264 copy.
+
+The code is [MIT](LICENSE). Face-detection weights are a separate license. See `apps/ml/README.md`.
 
 ## Run it on this computer
 
@@ -50,13 +54,13 @@ Without the Mac helpers:
 
 `compose.sh` refuses to start when `LIBRARY_DIR` is an absolute path that does not exist, so an unplugged drive does not become a new folder on the internal disk.
 
-The ML service is off unless you ask for it. It is a FastAPI process with a model cache and no models yet:
+Face detection and photo search run in an optional Python service. It is off until you start it. The first start downloads the models (about 1.7 GB). On a Mac, the first pass is faster outside Docker so it can use the GPU. See `apps/ml/README.md`.
 
 ```bash
 ./infra/compose.sh --profile ml up -d --build
 ```
 
-Set `ML_URL=http://ml:8090` in `.env` when the server should talk to that container. On a Mac, the first backlog is faster outside Docker with ONNX Runtime's CoreML provider. See the comment at the top of `apps/ml/app/main.py`.
+Set `ML_URL=http://ml:8090` in `.env` when the server should talk to that container.
 
 ## Away from home
 
@@ -91,8 +95,12 @@ Server tests run against Postgres with pgvector (`pnpm db:up`). Each test file g
 | `apps/server`     | Hono API, Drizzle migrations, pg-boss, storage         |
 | `apps/web`        | The React app, in a browser and inside the Android app |
 | `apps/mobile`     | Capacitor shell that bundles the web app and backup    |
-| `apps/ml`         | Python ML service skeleton                             |
+| `apps/ml`         | Optional face detection and search embeddings          |
 | `packages/shared` | Zod API contract used by the server and the web app    |
 | `infra`           | Docker Compose and the Mac launchd helpers             |
 
 Add an endpoint by defining it in `packages/shared` and implementing it in `apps/server/src/routes`. Until a handler is registered, the route returns 501. The contract is the source for OpenAPI.
+
+## License
+
+[MIT](LICENSE). The face model is not covered by that license. `apps/ml/README.md` has the details.
