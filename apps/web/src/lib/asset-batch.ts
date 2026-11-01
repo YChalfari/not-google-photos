@@ -13,6 +13,7 @@ async function refreshLibrary(queryClient: ReturnType<typeof useQueryClient>) {
   await queryClient.invalidateQueries({ queryKey: ['timeline'] });
   await queryClient.invalidateQueries({ queryKey: ['asset'] });
   await queryClient.invalidateQueries({ queryKey: ['albums'] });
+  await queryClient.invalidateQueries({ queryKey: ['search'] });
 }
 
 /** Favorite, archive, or trash one photo or a selection, and say what happened. */

@@ -1,13 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { AddToAlbumButton } from '@/components/add-to-album';
 import { AssetDialog } from '@/components/asset-dialog';
 import { FaceAvatar } from '@/components/face-avatar';
 import { PhotoGrid } from '@/components/photo-grid';
+import { SelectionBar } from '@/components/selection-bar';
 import { EmptyState, ErrorState, LoadingBlock, Page } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { useAssetBatch } from '@/lib/asset-batch';
 import { useAssetParam } from '@/lib/asset-route';
 
 export function SearchPage() {
@@ -19,7 +22,9 @@ export function SearchPage() {
   const type = params.get('type') ?? '';
   const cursor = params.get('cursor') ?? '';
   const [draft, setDraft] = useState(q);
+  const [selected, setSelected] = useState<Set<string> | null>(null);
   const viewer = useAssetParam();
+  const batch = useAssetBatch();
   const searching = q.length > 0 || tag.length > 0 || city.length > 0 || type.length > 0;
 
   const suggestions = useQuery({
@@ -47,6 +52,17 @@ export function SearchPage() {
     enabled: !searching,
   });
 
+  const items = results.data?.items ?? [];
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelected(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected]);
+
   function replace(next: Record<string, string | null>) {
     const paramsNext = new URLSearchParams(params);
     for (const [key, value] of Object.entries(next)) {
@@ -54,14 +70,26 @@ export function SearchPage() {
       else paramsNext.delete(key);
     }
     paramsNext.delete('cursor');
+    setSelected(null);
     setParams(paramsNext);
   }
 
+  function toggle(id: string) {
+    setSelected((current) => {
+      const next = new Set(current ?? []);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSearch() {
+    setDraft('');
+    replace({ q: null, tag: null, city: null, type: null });
+  }
+
   return (
-    <Page
-      title="Search"
-      wide
-    >
+    <Page title="Search" wide>
       <form
         className="flex flex-col gap-3"
         onSubmit={(event) => {
@@ -115,32 +143,68 @@ export function SearchPage() {
 
       {searching ? (
         <>
-          <p className="text-sm text-muted-foreground">
-            {q ? `“${q}”` : null}
-            {tag ? ` tagged ${tag}` : null}
-            {city ? ` in ${city}` : null}
-            {type ? ` ${type}s` : null}
-            {' · '}
-            <button type="button" className="underline-offset-4 hover:underline" onClick={() => replace({ q: null, tag: null, city: null, type: null })}>
-              Clear
-            </button>
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              {q ? `“${q}”` : null}
+              {tag ? ` tagged ${tag}` : null}
+              {city ? ` in ${city}` : null}
+              {type ? ` ${type}s` : null}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={clearSearch}>
+                Clear search
+              </Button>
+              {items.length > 0 ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={selected ? 'default' : 'outline'}
+                  onClick={() => setSelected(selected ? null : new Set())}
+                >
+                  {selected ? 'Done' : 'Select'}
+                </Button>
+              ) : null}
+            </div>
+          </div>
           {results.isPending ? <LoadingBlock label="Searching" /> : null}
           {results.isError ? (
-            <ErrorState title="Couldn't search" error={results.error} onRetry={() => void results.refetch()} />
+            <ErrorState
+              title="Couldn't search"
+              error={results.error}
+              onRetry={() => void results.refetch()}
+            />
           ) : null}
-          {results.data && results.data.items.length === 0 ? (
+          {results.data && items.length === 0 ? (
             <EmptyState title="Nothing matched" body="Try another search." />
           ) : null}
-          {results.data && results.data.items.length > 0 ? (
-            <PhotoGrid assets={results.data.items} onOpen={viewer.open} />
+          {items.length > 0 ? (
+            <PhotoGrid
+              assets={items}
+              selecting={selected !== null}
+              selectedIds={selected ?? undefined}
+              onOpen={viewer.open}
+              onToggle={toggle}
+              onHold={(id) =>
+                setSelected((current) => {
+                  const next = new Set(current ?? []);
+                  next.add(id);
+                  return next;
+                })
+              }
+            />
           ) : null}
           {results.data?.nextCursor ? (
-            <Button variant="outline" onClick={() => setParams((current) => {
-              const next = new URLSearchParams(current);
-              next.set('cursor', results.data.nextCursor ?? '');
-              return next;
-            })}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSelected(null);
+                setParams((current) => {
+                  const next = new URLSearchParams(current);
+                  next.set('cursor', results.data.nextCursor ?? '');
+                  return next;
+                });
+              }}
+            >
               More
             </Button>
           ) : null}
@@ -149,7 +213,11 @@ export function SearchPage() {
 
       {!searching && explore.isPending ? <LoadingBlock label="Loading explore" /> : null}
       {!searching && explore.isError ? (
-        <ErrorState title="Couldn't load explore" error={explore.error} onRetry={() => void explore.refetch()} />
+        <ErrorState
+          title="Couldn't load explore"
+          error={explore.error}
+          onRetry={() => void explore.refetch()}
+        />
       ) : null}
       {!searching && explore.data ? (
         <div className="flex flex-col gap-8">
@@ -158,11 +226,17 @@ export function SearchPage() {
               <h2 className="font-serif text-2xl">People</h2>
               <div className="flex flex-wrap gap-3">
                 {explore.data.people.map((person) => (
-                  <Link key={person.id} to={`/people/${person.id}`} className="flex w-20 flex-col items-center gap-1">
+                  <Link
+                    key={person.id}
+                    to={`/people/${person.id}`}
+                    className="flex w-20 flex-col items-center gap-1"
+                  >
                     <span className="size-16 overflow-hidden rounded-full bg-secondary">
                       <FaceAvatar src={person.coverUrl} box={person.coverBox} alt="" />
                     </span>
-                    <span className="w-full truncate text-center text-xs">{person.name ?? 'Unnamed'}</span>
+                    <span className="w-full truncate text-center text-xs">
+                      {person.name ?? 'Unnamed'}
+                    </span>
                   </Link>
                 ))}
               </div>
@@ -177,7 +251,12 @@ export function SearchPage() {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {explore.data.things.map((thing) => (
-                  <Button key={thing.value} type="button" variant="outline" onClick={() => replace({ tag: thing.value, q: null })}>
+                  <Button
+                    key={thing.value}
+                    type="button"
+                    variant="outline"
+                    onClick={() => replace({ tag: thing.value, q: null })}
+                  >
                     {thing.label}
                     <span className="text-muted-foreground">{thing.count}</span>
                   </Button>
@@ -190,7 +269,12 @@ export function SearchPage() {
               <h2 className="font-serif text-2xl">Places</h2>
               <div className="flex flex-wrap gap-2">
                 {explore.data.places.map((place) => (
-                  <Button key={place.value} type="button" variant="outline" onClick={() => replace({ city: place.value, q: null })}>
+                  <Button
+                    key={place.value}
+                    type="button"
+                    variant="outline"
+                    onClick={() => replace({ city: place.value, q: null })}
+                  >
                     {place.label}
                   </Button>
                 ))}
@@ -198,7 +282,11 @@ export function SearchPage() {
             </section>
           ) : null}
           <section className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => replace({ type: 'video', q: null })}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => replace({ type: 'video', q: null })}
+            >
               Videos
               <span className="text-muted-foreground">{explore.data.videos.count}</span>
             </Button>
@@ -211,10 +299,54 @@ export function SearchPage() {
       ) : null}
       <AssetDialog
         assetId={viewer.assetId}
-        ids={results.data?.items.map((item) => item.id) ?? []}
+        ids={items.map((item) => item.id)}
         onClose={viewer.close}
         onNeighbor={viewer.select}
       />
+      {selected ? (
+        <SelectionBar
+          count={selected.size}
+          onClear={() => setSelected(null)}
+          onSelectAll={() => setSelected(new Set(items.map((item) => item.id)))}
+        >
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            pending={batch.isPending}
+            disabled={selected.size === 0}
+            onClick={() => batch.mutate({ ids: [...selected], isFavorite: true })}
+          >
+            Favorite
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            pending={batch.isPending}
+            disabled={selected.size === 0}
+            onClick={() => batch.mutate({ ids: [...selected], isArchived: true })}
+          >
+            Archive
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            pending={batch.isPending}
+            disabled={selected.size === 0}
+            onClick={() =>
+              batch.mutate(
+                { ids: [...selected], isTrashed: true },
+                { onSuccess: () => setSelected(null) },
+              )
+            }
+          >
+            Trash
+          </Button>
+          <AddToAlbumButton ids={[...selected]} disabled={batch.isPending || selected.size === 0} />
+        </SelectionBar>
+      ) : null}
     </Page>
   );
 }
