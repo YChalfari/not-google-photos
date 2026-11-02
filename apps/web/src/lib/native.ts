@@ -35,6 +35,11 @@ export function finishLaunch(): void {
   for (const listener of launchListeners) listener();
 }
 
+/** The address the phone last resolved, including a saved one that did not answer. */
+export function deviceServerAddress(): string | null {
+  return current?.baseUrl ?? null;
+}
+
 /** Stores the token in module memory only. Returns whether the phone is paired. */
 export async function refreshDeviceConnection(): Promise<boolean> {
   if (!usesDeviceAuth()) {

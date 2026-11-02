@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { LoadingScreen } from '@/components/loading-screen';
+import { ServerUnreachable } from '@/components/server-unreachable';
 import { ApiClientError, api } from '@/lib/api';
 import {
   clearDeviceConnection,
@@ -81,14 +82,7 @@ export function RequireAuth() {
   if (deviceAuth && !paired) {
     return <Navigate to="/connect" replace state={{ from: location.pathname }} />;
   }
-  if (infoError || !info) {
-    return (
-      <LoadingScreen
-        label="Waiting for the server"
-        note={infoError instanceof Error ? infoError.message : 'The server is not answering.'}
-      />
-    );
-  }
+  if (infoError || !info) return <ServerUnreachable error={infoError} />;
   if (info.setupRequired) return <Navigate to="/setup" replace />;
   if (meError) {
     return (

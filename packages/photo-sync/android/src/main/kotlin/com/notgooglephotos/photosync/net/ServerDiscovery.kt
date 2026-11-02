@@ -31,7 +31,7 @@ interface ServerDiscovery {
 
 /**
  * DNS-SD browsing through Android's NsdManager. The Mac's announcer advertises
- * `_ngphotos._tcp` with TXT keys `id` (server id), `path` (optional base path), and `scheme`.
+ * `_ngp._tcp` with TXT key `id` (server id). `scheme` and `path` are optional.
  */
 class NsdServerDiscovery(context: Context) : ServerDiscovery {
     private val nsd: NsdManager? = context.getSystemService(NsdManager::class.java)
@@ -108,6 +108,6 @@ class NsdServerDiscovery(context: Context) : ServerDiscovery {
         }
 
     companion object {
-        const val SERVICE_TYPE = "_ngphotos._tcp"
+        const val SERVICE_TYPE = "_ngp._tcp"
     }
 }

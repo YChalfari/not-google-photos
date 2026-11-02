@@ -1,6 +1,6 @@
 #!/bin/bash
 # Announces this server on the home network with Bonjour. Docker on a Mac cannot broadcast,
-# so launchd runs this on the host. Phones browse for _ngp._tcp and match id to the paired server.
+# so launchd runs this on the host. Phones browse for the service and match id to the paired server.
 set -euo pipefail
 
 PORT="${NGP_PORT:-4810}"
@@ -25,4 +25,13 @@ if [[ -z "$server_id" || -z "$name" ]]; then
   exit 1
 fi
 
-exec /usr/bin/dns-sd -R "$name" _ngp._tcp local "$PORT" "id=${server_id}" "name=${name}" "v=1" "api=/api"
+# `_ngp._tcp` is the service new builds browse. `_ngphotos._tcp` is what already-installed
+# phones browse, so an address change still reaches them without an app update.
+pids=()
+cleanup() { kill "${pids[@]}" 2>/dev/null || true; }
+trap cleanup EXIT INT TERM
+/usr/bin/dns-sd -R "$name" _ngp._tcp local "$PORT" "id=${server_id}" "name=${name}" "v=1" "api=/api" &
+pids+=($!)
+/usr/bin/dns-sd -R "$name" _ngphotos._tcp local "$PORT" "id=${server_id}" "scheme=http" &
+pids+=($!)
+wait
