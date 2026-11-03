@@ -109,6 +109,10 @@ class BackupCoordinator(
         val settings = store.settings
         if (!settings.hasServer) return null
         val network = conditions.network()
+        if (!network.connected) {
+            val fallback = settings.homeUrl ?: settings.remoteUrl ?: return null
+            return DeviceConnection(fallback.trimEnd('/'), token, settings.serverId)
+        }
         return when (val found = resolver.resolve(settings, token, network, AtomicInteger())) {
             is ServerResolver.Result.Reachable -> {
                 if (found.movedHome != null || (found.serverId != null && settings.serverId == null)) {

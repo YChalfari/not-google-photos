@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { FormEvent } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { GuestFrame } from '@/components/shell';
-import { LoadingScreen } from '@/components/loading-screen';
-import { ErrorState, Field, FormError } from '@/components/states';
+import { ConnectionScreen } from '@/components/connection-screen';
+import { Field, FormError } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,10 +23,9 @@ export function SetupPage() {
     },
   });
 
-  if (!ready) return <LoadingScreen label="Checking the server" />;
+  if (!ready) return <ConnectionScreen />;
   if (deviceAuth && !paired) return <Navigate to="/connect" replace />;
-  if (infoError || !info)
-    return <ErrorState title="The server is not answering" error={infoError} />;
+  if (infoError || !info) return <ConnectionScreen failed error={infoError} />;
   if (!info.setupRequired) return <Navigate to={deviceAuth ? '/' : '/login'} replace />;
   if (deviceAuth) {
     return (

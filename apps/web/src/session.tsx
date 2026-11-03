@@ -1,8 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { LoadingScreen } from '@/components/loading-screen';
-import { ServerUnreachable } from '@/components/server-unreachable';
+import { ConnectionScreen } from '@/components/connection-screen';
 import { ApiClientError, api } from '@/lib/api';
 import {
   clearDeviceConnection,
@@ -32,7 +31,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const info = useQuery({
     queryKey: ['server', 'info'],
     enabled: canTalk,
-    queryFn: () => api('server.info'),
+    queryFn: ({ signal }) => api('server.info', {}, { signal: requestSignal(signal) }),
   });
   const me = useQuery({
     queryKey: ['auth', 'me'],
@@ -78,11 +77,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 export function RequireAuth() {
   const location = useLocation();
   const { info, me, ready, infoError, meError, deviceAuth, paired } = useSession();
-  if (!ready) return <LoadingScreen label="Checking your session" />;
+  if (!ready) return <ConnectionScreen />;
   if (deviceAuth && !paired) {
     return <Navigate to="/connect" replace state={{ from: location.pathname }} />;
   }
-  if (infoError || !info) return <ServerUnreachable error={infoError} />;
+  if (infoError || !info) return <ConnectionScreen failed error={infoError} />;
   if (info.setupRequired) return <Navigate to="/setup" replace />;
   if (meError) {
     return (
@@ -111,9 +110,17 @@ export function RequireAdmin() {
 
 export function GuestOnly() {
   const { info, me, ready, deviceAuth, paired } = useSession();
-  if (!ready) return <LoadingScreen label="Checking your session" />;
+  if (!ready) return <ConnectionScreen />;
   if (deviceAuth) return <Navigate to={paired ? '/' : '/connect'} replace />;
   if (info?.setupRequired) return <Navigate to="/setup" replace />;
   if (me) return <Navigate to="/" replace />;
   return <Outlet />;
+}
+
+/** Gives up on a request that is still waiting after the phone has had time to connect. */
+function requestSignal(parent: AbortSignal, ms = 8000): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function' && typeof AbortSignal.any === 'function') {
+    return AbortSignal.any([parent, AbortSignal.timeout(ms)]);
+  }
+  return parent;
 }

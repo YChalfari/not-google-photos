@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { parsePairingUri } from '@ngp/shared';
 import { GuestFrame } from '@/components/shell';
-import { LoadingScreen } from '@/components/loading-screen';
+import { ConnectionScreen } from '@/components/connection-screen';
 import { Field, FormError } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,7 +44,7 @@ export function ConnectPage() {
       .catch(() => undefined);
   }, []);
 
-  if (!ready) return <LoadingScreen label="Checking this phone" />;
+  if (!ready) return <ConnectionScreen />;
   if (!usesDeviceAuth()) return <Navigate to="/login" replace />;
   if (paired) return <Navigate to={destination(location.state)} replace />;
 

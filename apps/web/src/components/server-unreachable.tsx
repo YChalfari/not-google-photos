@@ -16,7 +16,14 @@ import {
 import { useSession } from '@/session-context';
 
 /** Shown when the saved server address no longer answers, so the phone can point at a new one. */
-export function ServerUnreachable({ error }: { error: unknown }) {
+export function ServerUnreachable({
+  error,
+  onRetry,
+}: {
+  error: unknown;
+  /** When set, Try again returns to the connecting screen before starting another attempt. */
+  onRetry?: () => Promise<void>;
+}) {
   const deviceAuth = usesDeviceAuth();
   const { refresh } = useSession();
   const queryClient = useQueryClient();
@@ -101,17 +108,26 @@ export function ServerUnreachable({ error }: { error: unknown }) {
   }
 
   const detail = friendlyError(error);
+  const network = isNetworkFailure(error);
+  const title =
+    deviceAuth && network
+      ? "Couldn't connect to Wi-Fi"
+      : network
+        ? "Couldn't reach the server"
+        : "The server isn't answering";
+  const description =
+    deviceAuth && network
+      ? 'Check that this phone is on Wi-Fi, then try again.'
+      : deviceAuth
+        ? 'This phone is still using its saved address. If the Wi-Fi address changed, enter the new one.'
+        : 'Check that the server is running, then try again.';
 
   return (
     <GuestFrame>
       <Card>
         <CardHeader>
-          <CardTitle>The server isn't answering</CardTitle>
-          <CardDescription>
-            {deviceAuth
-              ? 'This phone is still using its saved address. If the Wi-Fi address changed, enter the new one.'
-              : 'Check that the server is running, then try again.'}
-          </CardDescription>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {deviceAuth && tried ? (
@@ -144,16 +160,15 @@ export function ServerUnreachable({ error }: { error: unknown }) {
               </Field>
               {formError ? <FormError error={new Error(formError)} /> : null}
               <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={pending}>
-                  {pending ? 'Trying…' : 'Use this address'}
-                </Button>
                 <Button
                   type="button"
-                  variant="outline"
                   disabled={pending}
-                  onClick={() => void tryAgain()}
+                  onClick={() => void (onRetry ? onRetry() : tryAgain())}
                 >
-                  Try again
+                  {pending ? 'Trying…' : 'Try again'}
+                </Button>
+                <Button type="submit" variant="outline" disabled={pending}>
+                  {pending ? 'Trying…' : 'Use this address'}
                 </Button>
                 <Button
                   type="button"
@@ -168,7 +183,11 @@ export function ServerUnreachable({ error }: { error: unknown }) {
           ) : (
             <>
               {formError ? <FormError error={new Error(formError)} /> : null}
-              <Button type="button" disabled={pending} onClick={() => void tryAgain()}>
+              <Button
+                type="button"
+                disabled={pending}
+                onClick={() => void (onRetry ? onRetry() : tryAgain())}
+              >
                 {pending ? 'Trying…' : 'Try again'}
               </Button>
             </>
@@ -209,7 +228,23 @@ export function ServerUnreachable({ error }: { error: unknown }) {
 }
 
 function friendlyError(error: unknown): string | null {
+  if (isNetworkFailure(error)) return null;
   const message = errorMessage(error, '');
-  if (!message || message === 'Failed to fetch' || message === 'Load failed') return null;
-  return message;
+  return message || null;
+}
+
+/** No response at all: the phone is offline, or the attempt was given up. */
+function isNetworkFailure(error: unknown): boolean {
+  if (!error) return true;
+  if (error instanceof DOMException) {
+    return error.name === 'AbortError' || error.name === 'TimeoutError';
+  }
+  if (!(error instanceof Error)) return false;
+  return (
+    error.name === 'AbortError' ||
+    error.name === 'TimeoutError' ||
+    error.message === 'Failed to fetch' ||
+    error.message === 'Load failed' ||
+    /timed out|network|offline/i.test(error.message)
+  );
 }
