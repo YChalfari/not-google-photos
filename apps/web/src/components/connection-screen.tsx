@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { LoadingScreen } from '@/components/loading-screen';
 import { ServerUnreachable } from '@/components/server-unreachable';
-import { refreshDeviceConnection, usesDeviceAuth } from '@/lib/native';
+import { refreshDeviceConnection } from '@/lib/native';
 import { useSession } from '@/session-context';
 
 /** How long a normal attempt can sit on "Connecting" before we explain and offer Try again. */
@@ -22,7 +22,6 @@ export function ConnectionScreen({
   failed?: boolean;
   error?: unknown;
 }) {
-  const phone = usesDeviceAuth();
   const { refresh } = useSession();
   const queryClient = useQueryClient();
   const retrying = useRef(false);
@@ -58,7 +57,7 @@ export function ConnectionScreen({
   }
 
   if (phase === 'connecting') {
-    return <LoadingScreen label={phone ? 'Connecting to Wi-Fi' : 'Connecting'} />;
+    return <LoadingScreen label="Connecting to the server" />;
   }
   return <ServerUnreachable error={error} onRetry={tryAgain} />;
 }

@@ -109,18 +109,12 @@ export function ServerUnreachable({
 
   const detail = friendlyError(error);
   const network = isNetworkFailure(error);
-  const title =
-    deviceAuth && network
-      ? "Couldn't connect to Wi-Fi"
-      : network
-        ? "Couldn't reach the server"
-        : "The server isn't answering";
-  const description =
-    deviceAuth && network
-      ? 'Check that this phone is on Wi-Fi, then try again.'
-      : deviceAuth
-        ? 'This phone is still using its saved address. If the Wi-Fi address changed, enter the new one.'
-        : 'Check that the server is running, then try again.';
+  const title = network ? "Couldn't connect to the server" : "The server isn't answering";
+  const description = network
+    ? 'Check that the server is on, then try again.'
+    : deviceAuth
+      ? 'This phone is still using its saved address. If the Wi-Fi address changed, enter the new one.'
+      : 'Check that the server is running, then try again.';
 
   return (
     <GuestFrame>
