@@ -46,6 +46,7 @@ const id = () => uuid('id').primaryKey().defaultRandom();
 export const userRole = pgEnum('user_role', ['admin', 'member']);
 export const devicePlatform = pgEnum('device_platform', ['android', 'ios', 'web', 'other']);
 export const assetType = pgEnum('asset_type', ['image', 'video']);
+export const assetIntake = pgEnum('asset_intake', ['library', 'review']);
 export const processingState = pgEnum('processing_state', [
   'pending',
   'processing',
@@ -268,6 +269,11 @@ export const assets = pgTable(
 
     isFavorite: boolean('is_favorite').notNull().default(false),
     isArchived: boolean('is_archived').notNull().default(false),
+    /**
+     * `review` photos are uploaded but hidden until a known person is found or the owner keeps them.
+     * They still count toward storage.
+     */
+    intake: assetIntake('intake').notNull().default('library'),
     trashedAt: timestamp('trashed_at', tz),
     /** Edited copies point at their original (same owner, enforced by a composite FK). */
     versionOfId: uuid('version_of_id'),
@@ -291,7 +297,26 @@ export const assets = pgTable(
     index('assets_trashed_idx')
       .on(t.trashedAt)
       .where(sql`${t.trashedAt} is not null`),
+    index('assets_owner_review_idx')
+      .on(t.ownerId, t.capturedAt.desc())
+      .where(sql`${t.intake} = 'review'`),
     check('assets_checksum_sha1_hex', sql`${t.checksumSha1} ~ '^[0-9a-f]{40}$'`),
+  ],
+);
+
+/** Checksums the owner refused. The phone must not upload them again. */
+export const rejectedChecksums = pgTable(
+  'rejected_checksums',
+  {
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    sha1: text('sha1').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerId, t.sha1] }),
+    check('rejected_checksums_sha1_hex', sql`${t.sha1} ~ '^[0-9a-f]{40}$'`),
   ],
 );
 

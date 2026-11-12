@@ -23,6 +23,7 @@ import { useAssetBatch } from '@/lib/asset-batch';
 import { formatBytes, formatMonth } from '@/lib/format';
 import { assetUrl } from '@/lib/native';
 import { uploadAsset } from '@/lib/upload';
+import { ReviewWaitingLink } from '@/pages/review';
 import { useStatus } from '@/lib/status';
 import { useSession } from '@/session-context';
 
@@ -170,6 +171,7 @@ export function LibraryPage() {
           </Button>
         </div>
       </div>
+      {scope === 'library' ? <ReviewWaitingLink /> : null}
       {scope === 'trash' ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">Kept for 30 days, then deleted.</p>

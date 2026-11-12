@@ -1,8 +1,8 @@
 import type { PersonSummary } from '@ngp/shared';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { AppContext } from '../context';
 import type { DbOrTx } from '../db/client';
-import { faces, people, type PersonRow } from '../db/schema';
+import { assets, faces, people, type PersonRow } from '../db/schema';
 import { ApiError } from '../http/errors';
 import { availableVariants } from '../media/serve';
 
@@ -14,7 +14,15 @@ export async function refreshPeople(db: DbOrTx, personIds: readonly string[]): P
     const rows = await db
       .select({ id: faces.id, quality: faces.quality })
       .from(faces)
-      .where(and(eq(faces.personId, personId), eq(faces.ignored, false)));
+      .innerJoin(assets, eq(assets.id, faces.assetId))
+      .where(
+        and(
+          eq(faces.personId, personId),
+          eq(faces.ignored, false),
+          eq(assets.intake, 'library'),
+          isNull(assets.trashedAt),
+        ),
+      );
     const best = [...rows].sort((left, right) => (right.quality ?? 0) - (left.quality ?? 0))[0];
     const coverStillHere = person.coverFaceId !== null && rows.some((row) => row.id === person.coverFaceId);
     await db

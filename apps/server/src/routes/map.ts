@@ -13,6 +13,7 @@ export const mapHandlers: Handlers = {
       .where(
         and(
           eq(assets.ownerId, auth.user.id),
+          eq(assets.intake, 'library'),
           isNull(assets.trashedAt),
           isNotNull(assets.latitude),
           isNotNull(assets.longitude),

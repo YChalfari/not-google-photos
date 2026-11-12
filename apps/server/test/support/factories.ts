@@ -85,6 +85,7 @@ export async function insertAsset(
     mimeType?: string;
     capturedAt?: Date;
     trashed?: boolean;
+    intake?: 'library' | 'review';
   } = {},
 ): Promise<AssetRow> {
   const bytes = options.bytes ?? randomBytes(256);
@@ -103,6 +104,7 @@ export async function insertAsset(
       capturedAt,
       localDate: capturedAt.toISOString().slice(0, 10),
       trashedAt: options.trashed ? new Date() : null,
+      intake: options.intake ?? 'library',
     })
     .returning();
   return asset!;

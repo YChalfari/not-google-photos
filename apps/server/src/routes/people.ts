@@ -159,6 +159,7 @@ export const peopleHandlers: Handlers = {
       .where(
         and(
           eq(assets.ownerId, auth.user.id),
+          eq(assets.intake, 'library'),
           isNull(assets.trashedAt),
           sql`exists (
             select 1 from faces

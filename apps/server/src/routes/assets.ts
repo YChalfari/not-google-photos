@@ -1,7 +1,7 @@
 import { AssetUploadFields, type AssetCheckResponse, type AssetVerifyResponse } from '@ngp/shared';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { canViewAsset, filterOwnedAssetIds } from '../authz/access';
-import { assets, files } from '../db/schema';
+import { assets, files, rejectedChecksums } from '../db/schema';
 import type { Handlers } from '../http/contract';
 import { ApiError, isUniqueViolation, validationError } from '../http/errors';
 import { syncAlbumRulesForAssets } from '../albums/rules';
@@ -9,8 +9,9 @@ import { deleteTrashedAssets } from '../jobs/maintenance';
 import { scheduleAssetProcessing } from '../media/derivatives';
 import { classifyUpload, originalFilename } from '../media/kinds';
 import { receiveUpload } from '../media/multipart';
-import { loadAsset, toDetail } from '../media/summaries';
+import { loadAsset, toDetail, toSummaries } from '../media/summaries';
 import { partsFromIso } from '../media/time';
+import { scheduleRecognition } from '../recognition/recognize';
 import { storageUsageFor } from '../services/accounts';
 import { ChecksumMismatchError } from '../storage/provider';
 
@@ -27,18 +28,29 @@ export const assetHandlers: Handlers = {
   'assets.check': async ({ ctx, auth, body }): Promise<AssetCheckResponse> => {
     const checksums = [...new Set(body.checksums)];
     const rows = await ctx.db
-      .select({ id: assets.id, checksum: assets.checksumSha1 })
+      .select({ id: assets.id, checksum: assets.checksumSha1, intake: assets.intake })
       .from(assets)
       .where(and(eq(assets.ownerId, auth.user.id), inArray(assets.checksumSha1, checksums)));
-    const byChecksum = new Map(rows.map((row) => [row.checksum, row.id]));
+    const byChecksum = new Map(rows.map((row) => [row.checksum, row]));
+    const refused = await ctx.db
+      .select({ sha1: rejectedChecksums.sha1 })
+      .from(rejectedChecksums)
+      .where(
+        and(eq(rejectedChecksums.ownerId, auth.user.id), inArray(rejectedChecksums.sha1, checksums)),
+      );
+    const rejectedSet = new Set(refused.map((row) => row.sha1));
     const missing: string[] = [];
     const present: AssetCheckResponse['present'] = [];
+    const held: AssetCheckResponse['held'] = [];
+    const rejected: string[] = [];
     for (const checksum of checksums) {
-      const assetId = byChecksum.get(checksum);
-      if (assetId) present.push({ checksum, assetId });
+      const row = byChecksum.get(checksum);
+      if (row?.intake === 'library') present.push({ checksum, assetId: row.id });
+      else if (row?.intake === 'review') held.push({ checksum, assetId: row.id });
+      else if (rejectedSet.has(checksum)) rejected.push(checksum);
       else missing.push(checksum);
     }
-    return { missing, present };
+    return { missing, present, held, rejected };
   },
 
   'assets.upload': async ({ c, ctx, auth, setStatus }) => {
@@ -69,12 +81,22 @@ export const assetHandlers: Handlers = {
 
     const filename = originalFilename(fields.filename);
     const [existing] = await ctx.db
-      .select({ id: assets.id })
+      .select({ id: assets.id, intake: assets.intake })
       .from(assets)
       .where(and(eq(assets.ownerId, auth.user.id), eq(assets.checksumSha1, fields.checksum)));
     if (existing) {
       setStatus(200);
-      return { assetId: existing.id, status: 'duplicate' as const };
+      return { assetId: existing.id, status: 'duplicate' as const, intake: existing.intake };
+    }
+    const [refused] = await ctx.db
+      .select({ sha1: rejectedChecksums.sha1 })
+      .from(rejectedChecksums)
+      .where(
+        and(eq(rejectedChecksums.ownerId, auth.user.id), eq(rejectedChecksums.sha1, fields.checksum)),
+      );
+    if (refused) {
+      setStatus(200);
+      return { assetId: null, status: 'rejected' as const, intake: null };
     }
 
     if (auth.user.quotaBytes != null) {
@@ -115,6 +137,7 @@ export const assetHandlers: Handlers = {
           durationMs: fields.durationMs ?? null,
           isFavorite: fields.isFavorite ?? false,
           versionOfId: fields.versionOf ?? null,
+          intake: fields.intake ?? 'library',
           processingState: 'pending',
         })
         .returning({ id: assets.id });
@@ -127,16 +150,16 @@ export const assetHandlers: Handlers = {
         { assetId: created.id, userId: auth.user.id, bytes: file.sizeBytes },
         'Stored upload',
       );
-      return { assetId: created.id, status: 'created' as const };
+      return { assetId: created.id, status: 'created' as const, intake: fields.intake ?? 'library' };
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
       const [race] = await ctx.db
-        .select({ id: assets.id })
+        .select({ id: assets.id, intake: assets.intake })
         .from(assets)
         .where(and(eq(assets.ownerId, auth.user.id), eq(assets.checksumSha1, fields.checksum)));
       if (!race) throw error;
       setStatus(200);
-      return { assetId: race.id, status: 'duplicate' as const };
+      return { assetId: race.id, status: 'duplicate' as const, intake: race.intake };
     }
   },
 
@@ -147,7 +170,12 @@ export const assetHandlers: Handlers = {
     }
     const checksums = body.items.map((item) => item.checksum);
     const rows = await ctx.db
-      .select({ assetId: assets.id, checksum: assets.checksumSha1, file: files })
+      .select({
+        assetId: assets.id,
+        checksum: assets.checksumSha1,
+        intake: assets.intake,
+        file: files,
+      })
       .from(assets)
       .innerJoin(files, eq(files.id, assets.fileId))
       .where(and(eq(assets.ownerId, auth.user.id), inArray(assets.checksumSha1, checksums)));
@@ -155,7 +183,7 @@ export const assetHandlers: Handlers = {
     const results: AssetVerifyResponse['results'] = [];
     for (const item of body.items) {
       const row = byChecksum.get(item.checksum);
-      if (!row) {
+      if (!row || row.intake !== 'library') {
         results.push({ checksum: item.checksum, assetId: null, status: 'missing' });
         continue;
       }
@@ -190,7 +218,13 @@ export const assetHandlers: Handlers = {
           : {}),
         ...(body.isTrashed === false ? { trashedAt: null } : {}),
       })
-      .where(and(eq(assets.ownerId, auth.user.id), inArray(assets.id, [...owned])))
+      .where(
+        and(
+          eq(assets.ownerId, auth.user.id),
+          eq(assets.intake, 'library'),
+          inArray(assets.id, [...owned]),
+        ),
+      )
       .returning({ id: assets.id });
     if (body.isTrashed === false) {
       await syncAlbumRulesForAssets(
@@ -204,4 +238,84 @@ export const assetHandlers: Handlers = {
   'assets.emptyTrash': async ({ ctx, auth }) => ({
     deleted: await deleteTrashedAssets(ctx.db, { ownerId: auth.user.id }),
   }),
+
+  'assets.review': async ({ ctx, auth, query }) => {
+    const where = and(
+      eq(assets.ownerId, auth.user.id),
+      eq(assets.intake, 'review'),
+      isNull(assets.trashedAt),
+    );
+    const [counted] = await ctx.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(assets)
+      .where(where);
+    const offset = pageOffset(query.cursor);
+    const rows = await ctx.db
+      .select()
+      .from(assets)
+      .where(where)
+      .orderBy(sql`${assets.capturedAt} desc nulls last`, desc(assets.id))
+      .offset(offset)
+      .limit(query.limit + 1);
+    const page = rows.slice(0, query.limit);
+    return {
+      items: await toSummaries(ctx, auth.user.id, page),
+      total: Number(counted?.total ?? 0),
+      nextCursor: rows.length > query.limit ? String(offset + query.limit) : null,
+    };
+  },
+
+  'assets.acceptReview': async ({ ctx, auth, body }) => {
+    const updated = await ctx.db
+      .update(assets)
+      .set({
+        intake: 'library',
+        processingSteps: sql`${assets.processingSteps} || '{"faces":"pending"}'::jsonb`,
+      })
+      .where(
+        and(
+          eq(assets.ownerId, auth.user.id),
+          eq(assets.intake, 'review'),
+          isNull(assets.trashedAt),
+          inArray(assets.id, body.ids),
+        ),
+      )
+      .returning({ id: assets.id });
+    for (const row of updated) await scheduleRecognition(ctx, row.id);
+    return { updated: updated.length };
+  },
+
+  'assets.rejectReview': async ({ ctx, auth, body }) => {
+    const deleted = await ctx.db.transaction(async (tx) => {
+      const rows = await tx
+        .select({ id: assets.id, checksum: assets.checksumSha1 })
+        .from(assets)
+        .where(
+          and(
+            eq(assets.ownerId, auth.user.id),
+            eq(assets.intake, 'review'),
+            inArray(assets.id, body.ids),
+          ),
+        );
+      if (rows.length === 0) return 0;
+      await tx
+        .insert(rejectedChecksums)
+        .values(rows.map((row) => ({ ownerId: auth.user.id, sha1: row.checksum })))
+        .onConflictDoNothing();
+      await tx.delete(assets).where(
+        inArray(
+          assets.id,
+          rows.map((row) => row.id),
+        ),
+      );
+      return rows.length;
+    });
+    return { deleted };
+  },
 };
+
+function pageOffset(cursor: string | undefined): number {
+  if (!cursor) return 0;
+  const value = Number(cursor);
+  return Number.isInteger(value) && value >= 0 ? value : 0;
+}

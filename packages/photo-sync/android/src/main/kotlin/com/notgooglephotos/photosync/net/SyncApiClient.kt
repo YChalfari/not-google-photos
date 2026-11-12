@@ -104,6 +104,7 @@ class SyncApiClient internal constructor(
             addFormDataPart("folder", upload.folder)
             addFormDataPart("favorite", upload.favorite.toString())
             upload.versionOf?.let { addFormDataPart("versionOf", it) }
+            addFormDataPart("intake", upload.intake)
             addFormDataPart("file", upload.fileName, filePart)
         }.build()
         val request = authorized(endpoint(UPLOAD)).post(form).build()
@@ -116,12 +117,17 @@ class SyncApiClient internal constructor(
                             UploadResult.LocalChanged("The file changed while it was uploading")
                         } else {
                             val json = text.toJsonObjectOrNull()
-                            UploadResult.Stored(
-                                assetId = json?.let(::assetIdOf),
-                                duplicate = response.code == 409
-                                    || json?.optBoolean("duplicate", false) == true
-                                    || json?.optString("status") == "duplicate",
-                            )
+                            if (json?.optString("status") == "rejected") {
+                                UploadResult.NotWanted
+                            } else {
+                                UploadResult.Stored(
+                                    assetId = json?.let(::assetIdOf),
+                                    duplicate = response.code == 409
+                                        || json?.optBoolean("duplicate", false) == true
+                                        || json?.optString("status") == "duplicate",
+                                    intake = json?.optString("intake")?.takeIf { it == "review" } ?: "library",
+                                )
+                            }
                         }
                     }
                     response.code == 401 || response.code == 403 -> UploadResult.Unauthorized
@@ -235,7 +241,19 @@ class SyncApiClient internal constructor(
                             existing[entry.getString("checksum").lowercase()] = assetIdOf(entry)
                         }
                     }
-                    sent.filter { it !in missing }.forEach { existing.putIfAbsent(it, null) }
+                    val held = mutableMapOf<String, String?>()
+                    json.optJSONArray("held")?.let { array ->
+                        for (i in 0 until array.length()) {
+                            val entry = array.optJSONObject(i) ?: continue
+                            held[entry.getString("checksum").lowercase()] = assetIdOf(entry)
+                        }
+                    }
+                    val rejected = json.optJSONArray("rejected")?.let { array ->
+                        (0 until array.length()).map { array.getString(it).lowercase() }.toSet()
+                    } ?: emptySet()
+                    val accounted = missing + held.keys + rejected
+                    sent.filter { it !in accounted }.forEach { existing.putIfAbsent(it, null) }
+                    return CheckResult(missing = missing, existing = existing, held = held, rejected = rejected)
                 }
                 json.has("results") -> {
                     val results = json.getJSONArray("results")
@@ -325,7 +343,12 @@ sealed interface ApiResult<out T> {
     data class NetworkError(val message: String) : ApiResult<Nothing>
 }
 
-data class CheckResult(val missing: Set<String>, val existing: Map<String, String?>)
+data class CheckResult(
+    val missing: Set<String>,
+    val existing: Map<String, String?>,
+    val held: Map<String, String?> = emptyMap(),
+    val rejected: Set<String> = emptySet(),
+)
 
 data class PairResult(val deviceToken: String, val serverId: String?, val deviceId: String?, val userName: String?)
 
@@ -349,12 +372,16 @@ class AssetUpload(
     val folder: String,
     val favorite: Boolean,
     val versionOf: String?,
+    /** `review` or `library`. */
+    val intake: String = "library",
     val open: () -> OpenedMedia,
     val onProgress: (sent: Long, total: Long) -> Unit,
 )
 
 sealed interface UploadResult {
-    data class Stored(val assetId: String?, val duplicate: Boolean) : UploadResult
+    data class Stored(val assetId: String?, val duplicate: Boolean, val intake: String = "library") : UploadResult
+    /** These bytes were refused before. The phone should not try again. */
+    data object NotWanted : UploadResult
     /** The server refused this file for good (4xx other than auth); retrying won't help. */
     data class Rejected(val code: Int, val message: String) : UploadResult
     data object Unauthorized : UploadResult

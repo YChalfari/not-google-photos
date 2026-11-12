@@ -6,6 +6,7 @@ import { FormError, LoadingBlock, Page } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { isNativeApp } from '@/lib/native';
+import { ReviewWaitingLink } from '@/pages/review';
 
 const PHASE: Record<SyncStatus['phase'], string> = {
   idle: 'Idle',
@@ -39,10 +40,9 @@ function formatEpoch(ms: number | null): string {
 export function BackupPage() {
   if (!isNativeApp()) {
     return (
-      <Page
-        title="Backup"
-        lede="Backup runs on the phone. Pair one from Settings."
-      />
+      <Page title="Backup" lede="Backup runs on the phone. Pair one from Settings.">
+        <ReviewWaitingLink />
+      </Page>
     );
   }
   return <PhoneBackup />;
@@ -71,6 +71,7 @@ function PhoneBackup() {
   const status = statusQuery.data ?? null;
   const permissions = permissionsQuery.data ?? null;
   const requireCharging = settingsQuery.data?.settings.requireCharging ?? true;
+  const includeOtherPhotos = settingsQuery.data?.settings.includeOtherPhotos ?? true;
 
   useEffect(() => {
     let cancelled = false;
@@ -146,6 +147,7 @@ function PhoneBackup() {
 
   return (
     <Page title="Backup">
+      <ReviewWaitingLink />
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-3">
           <div>
@@ -240,6 +242,27 @@ function PhoneBackup() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-primary"
+              checked={includeOtherPhotos}
+              disabled={busy !== null || !settingsQuery.data}
+              onChange={(event) =>
+                void run('other', () =>
+                  PhotoSync.configure({ includeOtherPhotos: event.target.checked }),
+                )
+              }
+            />
+            <span>
+              Also back up photos from Downloads, WhatsApp, and other folders
+              <span className="mt-1 block text-muted-foreground">
+                Those photos wait in Review unless they show someone already in your library.
+                Screenshots and camera scans always wait there. The first time this is on, older
+                photos wait for Wi-Fi and charging.
+              </span>
+            </span>
+          </label>
           <label className="flex items-start gap-3 text-sm">
             <input
               type="checkbox"
@@ -355,6 +378,7 @@ const ACTION_NOTE: Record<string, string> = {
   retry: 'Trying the failed ones again.',
   schedule: 'Schedule saved.',
   charging: 'Saved.',
+  other: 'Saved.',
   permissions: 'Done.',
   battery: 'Opened battery settings.',
   folders: 'Folders loaded.',

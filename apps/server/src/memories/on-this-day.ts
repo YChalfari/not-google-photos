@@ -82,6 +82,7 @@ async function candidates(db: DbOrTx, userId: string, date: string): Promise<Dat
     .where(
       and(
         eq(assets.ownerId, userId),
+        eq(assets.intake, 'library'),
         isNull(assets.trashedAt),
         sql`${assets.localDate} is not null`,
         sql`to_char(${assets.localDate}, 'MM-DD') = ${date.slice(5)}`,

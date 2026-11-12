@@ -7,7 +7,10 @@ import androidx.room.PrimaryKey
 
 enum class MediaKind { IMAGE, VIDEO }
 
-enum class ItemState { PENDING, UPLOADING, BACKED_UP, FAILED }
+enum class ItemState { PENDING, UPLOADING, BACKED_UP, HELD, SKIPPED, FAILED }
+
+/** `HELD` is on the server but not in the library yet. `SKIPPED` must not be uploaded. */
+enum class ItemIntake { LIBRARY, REVIEW }
 
 /** One row per photo or video in the backup scope. This table is how the phone knows what's backed up. */
 @Entity(
@@ -57,6 +60,8 @@ data class MediaItemEntity(
     @ColumnInfo(name = "last_seen_scan") val lastSeenScan: Long,
     /** False once a full scan no longer finds the file in the selected folders. */
     val present: Boolean = true,
+    /** `REVIEW` uploads into the holding area. Camera shots stay `LIBRARY`. */
+    val intake: ItemIntake = ItemIntake.LIBRARY,
 ) {
     val deviceAssetId: String get() = "$volume:$mediaId"
 }

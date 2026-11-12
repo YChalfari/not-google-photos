@@ -29,6 +29,7 @@ import com.notgooglephotos.photosync.engine.FreeUpRules
 import com.notgooglephotos.photosync.engine.RunOptions
 import com.notgooglephotos.photosync.engine.RunTrigger
 import com.notgooglephotos.photosync.engine.SyncPhase
+import com.notgooglephotos.photosync.media.IntakeRules
 import com.notgooglephotos.photosync.media.MediaDeleteActivity
 import com.notgooglephotos.photosync.model.SyncSettings
 import com.notgooglephotos.photosync.model.SyncTrigger
@@ -218,6 +219,7 @@ class PhotoSyncPlugin : Plugin() {
                 val folders = JSArray()
                 for (folder in runtime.library.listFolders()) {
                     val id = runCatching { SyncSettings.normalizeFolder(folder.relativePath) }.getOrNull() ?: continue
+                    if (!IntakeRules.isDirectLibraryFolder(id)) continue
                     folders.put(
                         JSObject()
                             .put("id", id)
@@ -524,6 +526,7 @@ class PhotoSyncPlugin : Plugin() {
             .put("paired", runtime.store.deviceToken != null)
             .put("folders", JSONArray(settings.folders))
             .put("includeVideos", settings.includeVideos)
+            .put("includeOtherPhotos", settings.includeOtherPhotos)
             .put("wifiOnly", settings.wifiOnly)
             .put("requireCharging", settings.requireCharging)
             .put("videosOnlyWhileCharging", settings.videosOnlyWhileCharging)

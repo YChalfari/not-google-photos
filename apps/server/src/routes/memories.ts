@@ -19,7 +19,13 @@ async function present(
     .select({ memoryId: memoryAssets.memoryId, count: sql<number>`count(*)::int` })
     .from(memoryAssets)
     .innerJoin(assets, eq(assets.id, memoryAssets.assetId))
-    .where(and(inArray(memoryAssets.memoryId, ids), isNull(assets.trashedAt)))
+    .where(
+      and(
+        inArray(memoryAssets.memoryId, ids),
+        eq(assets.intake, 'library'),
+        isNull(assets.trashedAt),
+      ),
+    )
     .groupBy(memoryAssets.memoryId);
   const countById = new Map(counts.map((row) => [row.memoryId, Number(row.count)]));
   const coverIds = rows.flatMap((row) => (row.coverAssetId ? [row.coverAssetId] : []));
@@ -29,7 +35,9 @@ async function present(
       : await ctx.db
           .select({ id: assets.id })
           .from(assets)
-          .where(and(inArray(assets.id, coverIds), isNull(assets.trashedAt)));
+          .where(
+            and(inArray(assets.id, coverIds), eq(assets.intake, 'library'), isNull(assets.trashedAt)),
+          );
   const live = new Set(liveCovers.map((row) => row.id));
   const variants = await availableVariants(ctx.db, [...live]);
   return rows.map((row) => {
@@ -120,7 +128,13 @@ export const memoryHandlers: Handlers = {
       .select({ asset: assets })
       .from(memoryAssets)
       .innerJoin(assets, eq(assets.id, memoryAssets.assetId))
-      .where(and(eq(memoryAssets.memoryId, row.id), isNull(assets.trashedAt)))
+      .where(
+        and(
+          eq(memoryAssets.memoryId, row.id),
+          eq(assets.intake, 'library'),
+          isNull(assets.trashedAt),
+        ),
+      )
       .orderBy(asc(memoryAssets.position));
     const [summary] = await present(ctx, auth.user.id, [row]);
     return {

@@ -7,8 +7,11 @@ import com.notgooglephotos.photosync.engine.NetworkState
 import com.notgooglephotos.photosync.engine.RunOutcome
 import com.notgooglephotos.photosync.engine.RunTrigger
 import com.notgooglephotos.photosync.net.DiscoveredServer
+import com.notgooglephotos.photosync.queue.ItemIntake
 import com.notgooglephotos.photosync.queue.ItemState
 import com.notgooglephotos.photosync.queue.MediaKind
+import com.notgooglephotos.photosync.settings.SettingsStore
+import org.json.JSONObject
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -374,6 +377,85 @@ class SyncEngineTest {
         assertEquals(1, report.alreadyOnServer)
         assertEquals(1, fx.server.uploads.size)
         assertEquals(ItemState.BACKED_UP, fx.rows().single().state)
+    }
+
+    @Test
+    fun screenshotsAndOtherPhotosWaitAndJunkNeverUploads() {
+        fx.add("shot.jpg", bytes = "camera".toByteArray())
+        fx.add("screen.png", bytes = "screen".toByteArray(), folder = "DCIM/Screenshots/")
+        fx.add("scan.jpg", bytes = "scan".toByteArray(), folder = "DCIM/Documents/")
+        fx.add("rec.mp4", bytes = "video".toByteArray(), folder = "DCIM/Screenshots/", kind = MediaKind.VIDEO)
+        fx.add("dl.jpg", bytes = "download".toByteArray(), folder = "Download/")
+        fx.add("same.jpg", bytes = "camera".toByteArray(), folder = "WhatsApp/Media/WhatsApp Images/")
+        fx.add("anim.gif", bytes = "gif".toByteArray(), folder = "Download/", mimeType = "image/gif")
+        fx.add("sent.jpg", bytes = "sent".toByteArray(), folder = "WhatsApp/Media/WhatsApp Images/Sent/")
+        fx.add("note.jpg", bytes = "note".toByteArray(), folder = "WhatsApp/Media/WhatsApp Documents/")
+        fx.add("clip.mp4", bytes = "clip".toByteArray(), folder = "Download/", kind = MediaKind.VIDEO)
+
+        val report = fx.run(RunTrigger.MANUAL)
+        assertEquals(RunOutcome.COMPLETED, report.outcome)
+        val rows = fx.rows().associateBy { it.displayName }
+        assertEquals(
+            setOf("shot.jpg", "screen.png", "scan.jpg", "rec.mp4", "dl.jpg", "same.jpg"),
+            rows.keys,
+        )
+        assertEquals(ItemState.BACKED_UP, rows.getValue("shot.jpg").state)
+        assertEquals(ItemIntake.LIBRARY, rows.getValue("shot.jpg").intake)
+        assertEquals(ItemState.BACKED_UP, rows.getValue("same.jpg").state)
+        assertEquals(ItemState.HELD, rows.getValue("screen.png").state)
+        assertEquals(ItemState.HELD, rows.getValue("scan.jpg").state)
+        assertEquals(ItemState.HELD, rows.getValue("dl.jpg").state)
+        assertEquals(ItemState.BACKED_UP, rows.getValue("rec.mp4").state)
+        assertEquals(ItemIntake.LIBRARY, rows.getValue("rec.mp4").intake)
+
+        val byName = fx.server.uploads.associateBy { it.fileName }
+        assertEquals(5, fx.server.uploads.size)
+        assertEquals("library", byName.getValue("shot.jpg").intake)
+        assertEquals("review", byName.getValue("screen.png").intake)
+        assertEquals("review", byName.getValue("scan.jpg").intake)
+        assertEquals("review", byName.getValue("dl.jpg").intake)
+        assertEquals("library", byName.getValue("rec.mp4").intake)
+        assertTrue(fx.server.uploads.none { it.fileName == "same.jpg" })
+
+        val held = rows.getValue("dl.jpg")
+        fx.server.reject(held.checksum!!)
+        fx.run(RunTrigger.INTERVAL)
+        assertEquals(ItemState.SKIPPED, fx.rows().first { it.displayName == "dl.jpg" }.state)
+        assertEquals(ItemState.HELD, fx.rows().first { it.displayName == "screen.png" }.state)
+        assertEquals(5, fx.server.uploads.size)
+    }
+
+    @Test
+    fun turningOtherPhotosOffStillReviewsScreenshots() {
+        fx.store.settings = fx.store.settings.copy(includeOtherPhotos = false)
+        fx.add("screen.png", bytes = "screen".toByteArray(), folder = "DCIM/Screenshots/")
+        fx.add("dl.jpg", bytes = "download".toByteArray(), folder = "Download/")
+        fx.run(RunTrigger.MANUAL)
+        val rows = fx.rows()
+        assertEquals(listOf("screen.png"), rows.map { it.displayName })
+        assertEquals(ItemState.HELD, rows.single().state)
+    }
+
+    @Test
+    fun enablingOtherPhotosOnAnOlderInstallWaitsForCharging() {
+        val raw = JSONObject(fx.store.peekSettingsJson().toString())
+        raw.remove("includeOtherPhotos")
+        context.getSharedPreferences(SettingsStore.FILE, Context.MODE_PRIVATE)
+            .edit()
+            .putString(SettingsStore.KEY_SETTINGS, raw.toString())
+            .commit()
+        fx.store.firstBackupComplete = true
+        fx.conditions.charging = false
+        fx.add("old.jpg", bytes = "old".toByteArray(), folder = "Download/", dateAdded = 10, captureTime = 10_000)
+        val report = fx.run(RunTrigger.INTERVAL)
+        assertEquals(RunOutcome.NOTHING_TO_DO, report.outcome)
+        assertEquals(0, fx.server.uploads.size)
+        assertEquals(false, fx.store.firstBackupComplete)
+        assertTrue(fx.store.peekSettingsJson()!!.getBoolean("includeOtherPhotos"))
+        val row = fx.rows().single()
+        assertEquals(true, row.backlog)
+        assertEquals(ItemState.PENDING, row.state)
+        assertTrue(fx.follow.events.contains("firstBackup"))
     }
 
     @Test

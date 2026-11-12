@@ -12,6 +12,11 @@ data class SyncSettings(
     val serverId: String? = null,
     val folders: List<String> = DEFAULT_FOLDERS,
     val includeVideos: Boolean = true,
+    /**
+     * Still photos outside the camera folders upload into the holding area.
+     * Screenshots and camera document scans are reviewed even when this is off.
+     */
+    val includeOtherPhotos: Boolean = true,
     val wifiOnly: Boolean = true,
     /** First backup and videos wait until the phone is plugged in. */
     val requireCharging: Boolean = true,
@@ -22,7 +27,8 @@ data class SyncSettings(
     val hasServer: Boolean get() = homeUrl != null || remoteUrl != null
 
     /** Stable key for "which items are in scope", so the scanner knows when a full rescan is needed. */
-    val selectionKey: String get() = folders.sorted().joinToString("|") + "|videos=$includeVideos"
+    val selectionKey: String
+        get() = folders.sorted().joinToString("|") + "|videos=$includeVideos|other=$includeOtherPhotos"
 
     fun toJson(): JSONObject = JSONObject()
         .put("enabled", enabled)
@@ -31,6 +37,7 @@ data class SyncSettings(
         .put("serverId", serverId ?: JSONObject.NULL)
         .put("folders", JSONArray(folders))
         .put("includeVideos", includeVideos)
+        .put("includeOtherPhotos", includeOtherPhotos)
         .put("wifiOnly", wifiOnly)
         .put("requireCharging", requireCharging)
         .put("videosOnlyWhileCharging", videosOnlyWhileCharging)
@@ -46,6 +53,9 @@ data class SyncSettings(
         if (patch.has("serverId")) next = next.copy(serverId = patch.optStringOrNull("serverId")?.trim()?.ifEmpty { null })
         if (patch.has("folders")) next = next.copy(folders = normalizeFolders(patch.getJSONArray("folders").strings()))
         if (patch.has("includeVideos")) next = next.copy(includeVideos = patch.getBoolean("includeVideos"))
+        if (patch.has("includeOtherPhotos")) {
+            next = next.copy(includeOtherPhotos = patch.getBoolean("includeOtherPhotos"))
+        }
         if (patch.has("wifiOnly")) next = next.copy(wifiOnly = patch.getBoolean("wifiOnly"))
         if (patch.has("requireCharging")) next = next.copy(requireCharging = patch.getBoolean("requireCharging"))
         if (patch.has("videosOnlyWhileCharging")) {
@@ -71,6 +81,7 @@ data class SyncSettings(
             serverId = json.optStringOrNull("serverId"),
             folders = json.optJSONArray("folders")?.strings()?.let(::normalizeFolders) ?: DEFAULT_FOLDERS,
             includeVideos = json.optBoolean("includeVideos", true),
+            includeOtherPhotos = json.optBoolean("includeOtherPhotos", true),
             wifiOnly = json.optBoolean("wifiOnly", true),
             requireCharging = json.optBoolean("requireCharging", true),
             videosOnlyWhileCharging = json.optBoolean("videosOnlyWhileCharging", true),
@@ -94,6 +105,7 @@ data class SyncSettings(
         /** True when [next] backs up something [previous] did not: a wider folder or videos newly included. */
         fun grew(previous: SyncSettings, next: SyncSettings): Boolean {
             if (next.includeVideos && !previous.includeVideos) return true
+            if (next.includeOtherPhotos && !previous.includeOtherPhotos) return true
             return next.folders.any { folder -> previous.folders.none { old -> folder.startsWith(old, ignoreCase = true) } }
         }
 

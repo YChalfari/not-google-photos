@@ -1,6 +1,9 @@
 import { and, eq, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { assets } from '../db/schema';
 
+/** Photos the owner has accepted. Holding-area uploads stay out of every library surface. */
+export const inLibrary = eq(assets.intake, 'library');
+
 export type TimelineScopeName = 'library' | 'favorites' | 'archive' | 'trash';
 
 export interface TimelineFilter {
@@ -17,17 +20,18 @@ export const timelineMonth = sql<string>`to_char(coalesce(${assets.localDate}, (
 function ownScope(scope: TimelineScopeName): SQL {
   switch (scope) {
     case 'library':
-      return and(isNull(assets.trashedAt), eq(assets.isArchived, false))!;
+      return and(inLibrary, isNull(assets.trashedAt), eq(assets.isArchived, false))!;
     case 'favorites':
       return and(
+        inLibrary,
         isNull(assets.trashedAt),
         eq(assets.isArchived, false),
         eq(assets.isFavorite, true),
       )!;
     case 'archive':
-      return and(isNull(assets.trashedAt), eq(assets.isArchived, true))!;
+      return and(inLibrary, isNull(assets.trashedAt), eq(assets.isArchived, true))!;
     case 'trash':
-      return isNotNull(assets.trashedAt);
+      return and(inLibrary, isNotNull(assets.trashedAt))!;
   }
 }
 
@@ -40,6 +44,7 @@ export function timelineWhere(userId: string, filter: TimelineFilter): SQL {
   if (!filter.withShared || filter.scope === 'archive' || filter.scope === 'trash') return own;
   const shared = and(
     sql`${assets.ownerId} <> ${userId}`,
+    inLibrary,
     isNull(assets.trashedAt),
     eq(assets.isArchived, false),
     filter.scope === 'favorites' ? eq(assets.isFavorite, true) : undefined,

@@ -35,7 +35,7 @@ export function albumVisibleTo(userId: string, album: typeof albums = albums): S
 export function assetVisibleTo(userId: string, asset: typeof assets = assets): SQL {
   return sql`(
     ${asset.ownerId} = ${userId}
-    or (${asset.trashedAt} is null and exists (
+    or (${asset.trashedAt} is null and ${asset.intake} = 'library' and exists (
       select 1 from album_assets authz_aa
       where authz_aa.asset_id = ${asset.id} and authz_aa.album_id in ${accessibleAlbumIds(userId)}
     ))
@@ -49,8 +49,8 @@ export function assetVisibleTo(userId: string, asset: typeof assets = assets): S
  */
 export function assetInTimelineOf(userId: string, asset: typeof assets = assets): SQL {
   return sql`(
-    ${asset.ownerId} = ${userId}
-    or (${asset.trashedAt} is null and exists (
+    (${asset.ownerId} = ${userId} and ${asset.intake} = 'library')
+    or (${asset.trashedAt} is null and ${asset.intake} = 'library' and exists (
       select 1 from album_assets authz_aa
       join album_members authz_am on authz_am.album_id = authz_aa.album_id
       where authz_aa.asset_id = ${asset.id}
@@ -81,6 +81,7 @@ export function faceVisibleTo(userId: string, face: typeof faces = faces): SQL {
       where authz_ar.person_id = ${face.personId}
         and authz_aa.asset_id = ${face.assetId}
         and authz_asset.trashed_at is null
+        and authz_asset.intake = 'library'
         and authz_ar.album_id in ${accessibleAlbumIds(userId)}
     )
   )`;

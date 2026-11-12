@@ -8,9 +8,11 @@ import {
   IdParams,
   IsoDateTime,
   LocalDate,
+  PageQuery,
   QueryBool,
   Sha1Hex,
   UserRef,
+  paginated,
 } from '../primitives';
 
 /** What grids, search results, albums, and memories show for each photo or video. */
@@ -85,12 +87,19 @@ export const AssetCheckRequest = z.object({
 });
 export type AssetCheckRequest = z.input<typeof AssetCheckRequest>;
 
+export const AssetIntake = z.enum(['library', 'review']);
+export type AssetIntake = z.infer<typeof AssetIntake>;
+
 export const AssetCheckResponse = z
   .object({
-    /** Checksums not in your library yet: upload these. */
+    /** Checksums not on the server yet: upload these. */
     missing: z.array(Sha1Hex),
-    /** Already in your library: record the server asset id and skip the upload. */
+    /** Already in the library: record the server asset id and skip the upload. */
     present: z.array(z.object({ checksum: Sha1Hex, assetId: Id })),
+    /** Uploaded, still waiting in the holding area. Do not upload again and do not delete the phone copy. */
+    held: z.array(z.object({ checksum: Sha1Hex, assetId: Id })),
+    /** The owner said no. Do not upload again. */
+    rejected: z.array(Sha1Hex),
   })
   .meta({ id: 'AssetCheckResponse' });
 export type AssetCheckResponse = z.infer<typeof AssetCheckResponse>;
@@ -114,15 +123,25 @@ export const AssetUploadFields = z
     isFavorite: QueryBool.optional(),
     /** Server asset id of the original when this file is an edited copy. */
     versionOf: Id.optional(),
+    /**
+     * `review` stores the file in the holding area instead of the library.
+     * Omitted means `library`.
+     */
+    intake: AssetIntake.optional(),
   })
   .meta({ id: 'AssetUploadFields' });
 export type AssetUploadFields = z.input<typeof AssetUploadFields>;
 
 export const AssetUploadResponse = z
   .object({
-    assetId: Id,
-    /** `duplicate`: the same bytes were already in your library; nothing new was stored. */
-    status: z.enum(['created', 'duplicate']),
+    assetId: Id.nullable(),
+    /**
+     * `duplicate`: the same bytes were already stored; nothing new was kept.
+     * `rejected`: these bytes were refused before and were not stored again.
+     */
+    status: z.enum(['created', 'duplicate', 'rejected']),
+    /** Where the stored asset sits. Null when `status` is `rejected`. */
+    intake: AssetIntake.nullable(),
   })
   .meta({ id: 'AssetUploadResponse' });
 export type AssetUploadResponse = z.infer<typeof AssetUploadResponse>;
@@ -167,6 +186,10 @@ export const UpdateAssetsRequest = z
       value.isTrashed !== undefined,
     { message: 'Nothing to update' },
   );
+
+export const ReviewAssetIds = z.object({
+  ids: z.array(Id).min(1).max(1000),
+});
 
 export const assetEndpoints = defineEndpoints({
   'assets.check': {
@@ -239,6 +262,38 @@ export const assetEndpoints = defineEndpoints({
     auth: 'user',
     tag: 'assets',
     summary: 'Delete everything in your trash now',
+    response: z.object({ deleted: z.number().int().nonnegative() }),
+    stability: 'draft',
+  },
+  'assets.review': {
+    method: 'GET',
+    path: '/api/assets/review',
+    auth: 'user',
+    tag: 'assets',
+    summary: 'Photos waiting in the holding area, newest first',
+    query: PageQuery,
+    response: paginated(AssetSummary).extend({
+      total: z.number().int().nonnegative(),
+    }),
+    stability: 'draft',
+  },
+  'assets.acceptReview': {
+    method: 'POST',
+    path: '/api/assets/review/accept',
+    auth: 'user',
+    tag: 'assets',
+    summary: 'Move holding-area photos into the library',
+    body: ReviewAssetIds,
+    response: z.object({ updated: z.number().int().nonnegative() }),
+    stability: 'draft',
+  },
+  'assets.rejectReview': {
+    method: 'POST',
+    path: '/api/assets/review/reject',
+    auth: 'user',
+    tag: 'assets',
+    summary: 'Delete holding-area photos and remember not to upload those bytes again',
+    body: ReviewAssetIds,
     response: z.object({ deleted: z.number().int().nonnegative() }),
     stability: 'draft',
   },

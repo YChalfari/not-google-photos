@@ -18,6 +18,10 @@ class SettingsStore(context: Context, private val cipher: TokenCipher) {
         get() = prefs.getString(KEY_SETTINGS, null)?.let { SyncSettings.fromJson(JSONObject(it)) } ?: SyncSettings()
         set(value) = prefs.edit { putString(KEY_SETTINGS, value.toJson().toString()) }
 
+    /** Raw stored settings, so a missing key can be told from the default. Null before the first save. */
+    fun peekSettingsJson(): JSONObject? =
+        prefs.getString(KEY_SETTINGS, null)?.let { JSONObject(it) }
+
     /** Read-modify-write, so the engine and the plugin can't overwrite each other's changes. */
     @Synchronized
     fun updateSettings(transform: (SyncSettings) -> SyncSettings): SyncSettings {
@@ -95,7 +99,7 @@ class SettingsStore(context: Context, private val cipher: TokenCipher) {
 
     companion object {
         const val FILE = "ngp_photosync"
-        private const val KEY_SETTINGS = "settings"
+        internal const val KEY_SETTINGS = "settings"
         private const val KEY_TRIGGERS = "triggers"
         private const val KEY_TOKEN = "deviceToken"
         private const val KEY_MEMORY_TIME = "memoryNotificationTime"

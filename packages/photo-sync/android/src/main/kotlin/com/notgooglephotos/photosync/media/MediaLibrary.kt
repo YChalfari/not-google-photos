@@ -1,5 +1,6 @@
 package com.notgooglephotos.photosync.media
 
+import com.notgooglephotos.photosync.queue.ItemIntake
 import com.notgooglephotos.photosync.queue.MediaKind
 import java.io.InputStream
 
@@ -20,6 +21,8 @@ data class ScannedMedia(
     /** Epoch seconds. */
     val dateModified: Long,
     val favorite: Boolean,
+    /** Set by the scanner. The library itself leaves this as [ItemIntake.LIBRARY]. */
+    val intake: ItemIntake = ItemIntake.LIBRARY,
 )
 
 data class VolumeInfo(
@@ -57,6 +60,9 @@ interface MediaLibrary {
         sinceGeneration: Long?,
         sinceSeconds: Long?,
     ): List<ScannedMedia>
+
+    /** Every still image on the volume, including folders that are not backed up directly. */
+    fun queryAllImages(volume: String, sinceGeneration: Long?, sinceSeconds: Long?): List<ScannedMedia>
 
     fun listFolders(): List<FolderInfo>
 

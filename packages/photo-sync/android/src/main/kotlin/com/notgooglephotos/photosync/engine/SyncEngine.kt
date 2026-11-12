@@ -11,6 +11,7 @@ import com.notgooglephotos.photosync.net.AssetUpload
 import com.notgooglephotos.photosync.net.ServerResolver
 import com.notgooglephotos.photosync.net.SyncApiClient
 import com.notgooglephotos.photosync.net.UploadResult
+import com.notgooglephotos.photosync.queue.ItemIntake
 import com.notgooglephotos.photosync.queue.MediaItemEntity
 import com.notgooglephotos.photosync.queue.MediaKind
 import com.notgooglephotos.photosync.queue.SyncDatabase
@@ -136,6 +137,7 @@ class SyncEngine(
         }
 
         private suspend fun steps(): RunOutcome {
+            adoptOtherPhotos()
             val settings = store.settings
             if (!store.isConfigured) return RunOutcome.NOT_CONFIGURED
             if (store.needsPairing) return RunOutcome.NEEDS_PAIRING
@@ -190,6 +192,7 @@ class SyncEngine(
                 trigger == RunTrigger.MANUAL ||
                 store.firstBackupComplete
             var fullScan = trigger == RunTrigger.RECONCILE || options.fullScan
+            settleHeld(client)?.let { return it }
             for (pass in 1..MAX_PASSES) {
                 phase(SyncPhase.SCANNING)
                 val scan = indexer.scan(store.settings, fullScan, store.backlogCutoffMs)
@@ -256,10 +259,10 @@ class SyncEngine(
                 phase(SyncPhase.UPLOADING)
                 for ((checksum, rows) in ready.byChecksum) {
                     if (checksum !in ready.missing) continue
-                    val item = rows.first()
-                    if (item.kind == MediaKind.VIDEO && !videosAllowedNow(settings)) continue
-                    position += 1
-                    uploadOne(client, item, rows, position, queued)?.let { return it }
+            val item = rows.firstOrNull { it.intake == ItemIntake.LIBRARY } ?: rows.first()
+            if (item.kind == MediaKind.VIDEO && !videosAllowedNow(settings)) continue
+            position += 1
+            uploadOne(client, item, rows, position, queued)?.let { return it }
                     bump()
                 }
             }
@@ -285,10 +288,22 @@ class SyncEngine(
             }
             var marked = 0
             for ((checksum, rows) in byChecksum) {
-                if (checksum in check.missing) continue
-                db.media().markBackedUp(rows.map { it.id }, check.existing[checksum], clock.now())
-                alreadyOnServer += rows.size
-                marked += rows.size
+                val ids = rows.map { it.id }
+                when {
+                    checksum in check.existing -> {
+                        db.media().markBackedUp(ids, check.existing[checksum], clock.now())
+                        alreadyOnServer += rows.size
+                        marked += rows.size
+                    }
+                    checksum in check.held -> {
+                        db.media().markHeld(ids, check.held[checksum], clock.now())
+                        marked += rows.size
+                    }
+                    checksum in check.rejected -> {
+                        db.media().markSkipped(ids)
+                        marked += rows.size
+                    }
+                }
             }
             if (marked > 0) bump()
             return CheckedPage(ReadyPage(byChecksum, check.missing, marked), null)
@@ -352,6 +367,7 @@ class SyncEngine(
                     folder = item.relativePath,
                     favorite = item.favorite,
                     versionOf = item.versionOf,
+                    intake = if (item.intake == ItemIntake.REVIEW) "review" else "library",
                     open = { library.openOriginal(item.uri) },
                     onProgress = { sent, total ->
                         mutableState.update { state ->
@@ -364,7 +380,9 @@ class SyncEngine(
             val attempts = item.attempts + 1
             when (result) {
                 is UploadResult.Stored -> {
-                    db.media().markBackedUp(sameContent.map { it.id }, result.assetId, clock.now())
+                    val ids = sameContent.map { it.id }
+                    if (result.intake == "review") db.media().markHeld(ids, result.assetId, clock.now())
+                    else db.media().markBackedUp(ids, result.assetId, clock.now())
                     uploaded++
                     alreadyOnServer += sameContent.size - 1
                     bytes += item.size
@@ -373,6 +391,9 @@ class SyncEngine(
                         store.uploadsPausedUntil = null
                         followUps.cancelBackoffRetry()
                     }
+                }
+                UploadResult.NotWanted -> {
+                    db.media().markSkipped(sameContent.map { it.id })
                 }
                 is UploadResult.Rejected -> {
                     sameContent.forEach { db.media().markFailed(it.id, attempts, result.message) }
@@ -395,6 +416,47 @@ class SyncEngine(
                 UploadResult.Gone -> db.media().delete(item.id)
             }
             return null
+        }
+
+        /** Photos kept earlier move into the library once recognition or the owner accepts them. */
+        private suspend fun settleHeld(client: SyncApiClient): RunOutcome? {
+            val held = db.media().heldPresent()
+            if (held.isEmpty()) return null
+            for (page in held.chunked(SyncApiClient.CHECK_BATCH)) {
+                val check = when (val result = client.checkAssets(page.map { it.checksum!!.lowercase() })) {
+                    is ApiResult.Ok -> result.value
+                    ApiResult.Unauthorized -> return needsPairing("The server no longer accepts this phone. Pair it again.")
+                    is ApiResult.HttpError -> return pauseUploads(result.message)
+                    is ApiResult.NetworkError -> return pauseUploads(result.message)
+                }
+                for (item in page) {
+                    val checksum = item.checksum!!.lowercase()
+                    when {
+                        checksum in check.existing ->
+                            db.media().markBackedUp(listOf(item.id), check.existing[checksum], clock.now())
+                        checksum in check.rejected -> db.media().markSkipped(listOf(item.id))
+                        checksum in check.held -> Unit
+                        else -> db.media().markPending(listOf(item.id))
+                    }
+                }
+            }
+            bump()
+            return null
+        }
+
+        /**
+         * Installs that predate other-photo backup start that pile as a first backup, so older
+         * files wait for Wi-Fi and charging instead of uploading on the next hourly run.
+         */
+        private fun adoptOtherPhotos() {
+            val raw = store.peekSettingsJson() ?: return
+            if (raw.has("includeOtherPhotos")) return
+            store.updateSettings { it.copy(includeOtherPhotos = true) }
+            if (store.firstBackupComplete) {
+                store.backlogCutoffMs = clock.now()
+                store.firstBackupComplete = false
+                followUps.ensureFirstBackup()
+            }
         }
 
         private suspend fun recordLocalFailure(item: MediaItemEntity, error: String) {

@@ -156,6 +156,12 @@ export interface SyncSettings {
   folders?: FolderId[];
   /** Back up videos as well as photos. Default true. */
   includeVideos?: boolean;
+  /**
+   * Still photos outside the camera folders upload into the holding area.
+   * Screenshots and camera document scans are reviewed even when this is off.
+   * Default true.
+   */
+  includeOtherPhotos?: boolean;
   /** Only back up on Wi-Fi (unmetered networks). Default true. */
   wifiOnly?: boolean;
   /**
@@ -181,6 +187,8 @@ export interface StoredSyncSettings {
   paired: boolean;
   folders: FolderId[];
   includeVideos: boolean;
+  /** Still photos outside the camera folders go to the holding area. */
+  includeOtherPhotos: boolean;
   wifiOnly: boolean;
   requireCharging: boolean;
   videosOnlyWhileCharging: boolean;

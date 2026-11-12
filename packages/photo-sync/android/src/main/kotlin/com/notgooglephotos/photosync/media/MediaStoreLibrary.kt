@@ -63,6 +63,26 @@ class MediaStoreLibrary(private val context: Context) : MediaLibrary {
         return rows
     }
 
+    override fun queryAllImages(volume: String, sinceGeneration: Long?, sinceSeconds: Long?): List<ScannedMedia> {
+        val rows = mutableListOf<ScannedMedia>()
+        val collection = collectionFor(MediaKind.IMAGE, volume)
+        val (selection, args) = buildSince(sinceGeneration, sinceSeconds)
+        val queryArgs = Bundle().apply {
+            if (selection != null) {
+                putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
+                putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, args.toTypedArray())
+            }
+            putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, "${MediaStore.MediaColumns._ID} ASC")
+        }
+        resolver.query(collection, PROJECTION, queryArgs, null)?.use { cursor ->
+            val columns = Columns(cursor)
+            while (cursor.moveToNext()) {
+                columns.read(cursor, volume, MediaKind.IMAGE, collection)?.let(rows::add)
+            }
+        }
+        return rows
+    }
+
     override fun listFolders(): List<FolderInfo> {
         val counts = linkedMapOf<String, Pair<String, Int>>()
         for (volume in MediaStore.getExternalVolumeNames(context)) {
@@ -182,6 +202,22 @@ class MediaStoreLibrary(private val context: Context) : MediaLibrary {
                 args += sinceSeconds.toString()
             }
             return clauses.joinToString(" AND ") to args
+        }
+
+        /** The generation or timestamp half of [buildSelection], or null when every row should be read. */
+        internal fun buildSince(sinceGeneration: Long?, sinceSeconds: Long?): Pair<String?, List<String>> {
+            val args = mutableListOf<String>()
+            if (sinceGeneration != null && Build.VERSION.SDK_INT >= 30) {
+                args += sinceGeneration.toString()
+                args += sinceGeneration.toString()
+                return "(${MediaStore.MediaColumns.GENERATION_MODIFIED} > ? OR ${MediaStore.MediaColumns.GENERATION_ADDED} > ?)" to args
+            }
+            if (sinceSeconds != null) {
+                args += sinceSeconds.toString()
+                args += sinceSeconds.toString()
+                return "(${MediaStore.MediaColumns.DATE_ADDED} >= ? OR ${MediaStore.MediaColumns.DATE_MODIFIED} >= ?)" to args
+            }
+            return null to args
         }
 
         internal fun escapeLike(value: String): String =

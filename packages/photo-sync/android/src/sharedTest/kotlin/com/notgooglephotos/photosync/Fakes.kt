@@ -99,6 +99,7 @@ class FakeLibrary : MediaLibrary {
         dateModified: Long = dateAdded,
         favorite: Boolean = false,
         volume: String = VOLUME,
+        mimeType: String? = null,
     ): ScannedMedia {
         val id = nextId++
         val media = ScannedMedia(
@@ -106,7 +107,7 @@ class FakeLibrary : MediaLibrary {
             mediaId = id,
             uri = "content://fake/$volume/$id",
             kind = kind,
-            mimeType = if (kind == MediaKind.VIDEO) "video/mp4" else "image/jpeg",
+            mimeType = mimeType ?: if (kind == MediaKind.VIDEO) "video/mp4" else "image/jpeg",
             displayName = name,
             relativePath = folder,
             size = bytes.size.toLong(),
@@ -166,6 +167,22 @@ class FakeLibrary : MediaLibrary {
         }.map { it.media }
     }
 
+    override fun queryAllImages(volume: String, sinceGeneration: Long?, sinceSeconds: Long?): List<ScannedMedia> {
+        queryCalls++
+        lastSinceGeneration = sinceGeneration
+        lastSinceSeconds = sinceSeconds
+        sinceGenerations += sinceGeneration
+        return items.filter { entry ->
+            entry.media.volume == volume &&
+                entry.media.kind == MediaKind.IMAGE &&
+                when {
+                    sinceGeneration != null -> entry.generation > sinceGeneration
+                    sinceSeconds != null -> entry.media.dateAdded >= sinceSeconds || entry.media.dateModified >= sinceSeconds
+                    else -> true
+                }
+        }.map { it.media }
+    }
+
     override fun listFolders(): List<FolderInfo> = items
         .groupBy { it.media.relativePath }
         .map { (path, rows) -> FolderInfo(path, path.trim('/').substringAfterLast('/'), rows.size) }
@@ -206,9 +223,12 @@ class FakeSyncServer {
         val deviceAssetId: String,
         val folder: String,
         val favorite: String,
+        val intake: String,
     )
 
     private val known = linkedMapOf<String, String>()
+    private val intakeOf = mutableMapOf<String, String>()
+    private val rejected = mutableSetOf<String>()
     private val http = MockWebServer()
     private var started = false
 
@@ -235,6 +255,15 @@ class FakeSyncServer {
     /** Pretend this checksum was uploaded in an earlier install. */
     fun remember(checksum: String) {
         known[checksum] = assetId(checksum)
+        intakeOf[checksum] = "library"
+        rejected.remove(checksum)
+    }
+
+    /** The owner said no. The next check reports the checksum as rejected. */
+    fun reject(checksum: String) {
+        known.remove(checksum)
+        intakeOf.remove(checksum)
+        rejected += checksum
     }
 
     private fun handle(request: RecordedRequest): MockResponse {
@@ -265,11 +294,15 @@ class FakeSyncServer {
         checks++
         val sent = json.getJSONArray("checksums")
         val checksums = (0 until sent.length()).map { sent.getString(it) }
-        val missing = checksums.filter { it !in known }
-        val existing = checksums.filter { it in known }.joinToString(",") {
+        val missing = checksums.filter { it !in known && it !in rejected }
+        val present = checksums.filter { it in known && intakeOf[it] != "review" }.joinToString(",") {
             """{"checksum":"$it","assetId":"${known.getValue(it)}"}"""
         }
-        return """{"missing":[${missing.joinToString { "\"$it\"" }}],"existing":[$existing]}"""
+        val held = checksums.filter { it in known && intakeOf[it] == "review" }.joinToString(",") {
+            """{"checksum":"$it","assetId":"${known.getValue(it)}"}"""
+        }
+        val refused = checksums.filter { it in rejected }.joinToString(",") { "\"$it\"" }
+        return """{"missing":[${missing.joinToString { "\"$it\"" }}],"present":[$present],"held":[$held],"rejected":[$refused]}"""
     }
 
     private fun upload(request: RecordedRequest): MockResponse {
@@ -296,6 +329,7 @@ class FakeSyncServer {
             deviceAssetId = fields["deviceAssetId"] ?: "",
             folder = fields["folder"] ?: "",
             favorite = fields["favorite"] ?: "false",
+            intake = fields["intake"] ?: "library",
         )
         val code = when {
             upload.fileName in rejectNames -> 400
@@ -306,10 +340,15 @@ class FakeSyncServer {
             else -> {
                 uploads += upload
                 known[checksum] = assetId(checksum)
+                intakeOf[checksum] = upload.intake
                 200
             }
         }
-        val message = if (code == 200) """{"assetId":"${assetId(checksum)}","duplicate":false}""" else """{"message":"Upload failed"}"""
+        val message = if (code == 200) {
+            """{"assetId":"${assetId(checksum)}","status":"created","intake":"${upload.intake}"}"""
+        } else {
+            """{"message":"Upload failed"}"""
+        }
         return json(code, message)
     }
 
@@ -366,7 +405,8 @@ class EngineFixture(context: Context) {
         captureTime: Long = clock.nowMs,
         dateAdded: Long = clock.nowMs / 1000,
         favorite: Boolean = false,
-    ): ScannedMedia = library.add(name, bytes, folder, kind, captureTime, dateAdded, favorite = favorite)
+        mimeType: String? = null,
+    ): ScannedMedia = library.add(name, bytes, folder, kind, captureTime, dateAdded, favorite = favorite, mimeType = mimeType)
 
     fun run(trigger: RunTrigger, options: RunOptions = RunOptions()): RunReport = runBlocking { engine.run(trigger, options) }
 

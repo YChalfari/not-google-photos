@@ -24,15 +24,18 @@ export async function uploadAsset(file: File): Promise<UploadResult> {
   const { url, credentials } = nativeFetchParts('/api/assets', headers);
   const response = await fetch(url, { method: 'POST', body, credentials, headers });
   const json = (await response.json().catch(() => undefined)) as
-    UploadResult | { error?: { code?: string; message?: string; details?: unknown } } | undefined;
+    | { assetId?: string | null; status?: string; error?: { code?: string; message?: string; details?: unknown } }
+    | undefined;
   if (!response.ok) {
-    const error = json && 'error' in json ? json.error : undefined;
     throw new ApiClientError(
       response.status,
-      error?.code ?? 'internal_error',
-      error?.message ?? `Upload failed (${response.status})`,
-      error?.details,
+      json?.error?.code ?? 'internal_error',
+      json?.error?.message ?? `Upload failed (${response.status})`,
+      json?.error?.details,
     );
   }
-  return json as UploadResult;
+  if (!json?.assetId || json.status === 'rejected') {
+    throw new ApiClientError(response.status, 'rejected', 'This photo was already left out.');
+  }
+  return { assetId: json.assetId, status: json.status === 'duplicate' ? 'duplicate' : 'created' };
 }

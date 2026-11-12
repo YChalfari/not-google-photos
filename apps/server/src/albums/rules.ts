@@ -18,6 +18,7 @@ function faceMatchesRule(rule: string, face: string, asset: string) {
     and ${sql.raw(face)}.ignored = false
     and ${sql.raw(asset)}.id = ${sql.raw(face)}.asset_id
     and ${sql.raw(asset)}.trashed_at is null
+    and ${sql.raw(asset)}.intake = 'library'
     and ${sql.raw(asset)}.owner_id = ${sql.raw(rule)}.user_id
     and (
       ${sql.raw(rule)}.start_date is null

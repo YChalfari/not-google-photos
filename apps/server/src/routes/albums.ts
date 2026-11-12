@@ -67,7 +67,13 @@ async function assetCounts(db: DbOrTx, albumIds: readonly string[]): Promise<Map
     .select({ albumId: albumAssets.albumId, count: sql<number>`count(*)::int` })
     .from(albumAssets)
     .innerJoin(assets, eq(assets.id, albumAssets.assetId))
-    .where(and(inArray(albumAssets.albumId, [...albumIds]), isNull(assets.trashedAt)))
+    .where(
+      and(
+        inArray(albumAssets.albumId, [...albumIds]),
+        eq(assets.intake, 'library'),
+        isNull(assets.trashedAt),
+      ),
+    )
     .groupBy(albumAssets.albumId);
   for (const row of rows) counts.set(row.albumId, Number(row.count));
   return counts;
@@ -87,7 +93,13 @@ async function coverUrls(
       : await ctx.db
           .select({ id: assets.id })
           .from(assets)
-          .where(and(inArray(assets.id, explicitIds), isNull(assets.trashedAt)));
+          .where(
+            and(
+              inArray(assets.id, explicitIds),
+              eq(assets.intake, 'library'),
+              isNull(assets.trashedAt),
+            ),
+          );
   const live = new Set(liveExplicit.map((row) => row.id));
   const fallback = await ctx.db
     .selectDistinctOn([albumAssets.albumId], {
@@ -102,6 +114,7 @@ async function coverUrls(
           albumAssets.albumId,
           rows.map((row) => row.id),
         ),
+        eq(assets.intake, 'library'),
         isNull(assets.trashedAt),
       ),
     )
@@ -256,7 +269,9 @@ async function insertOwnedAssets(
   const live = await db
     .select({ id: assets.id })
     .from(assets)
-    .where(and(inArray(assets.id, [...owned]), isNull(assets.trashedAt)));
+    .where(
+      and(inArray(assets.id, [...owned]), eq(assets.intake, 'library'), isNull(assets.trashedAt)),
+    );
   if (live.length === 0) return 0;
   const inserted = await db
     .insert(albumAssets)
@@ -411,7 +426,13 @@ export const albumHandlers: Handlers = {
       .select({ asset: assets })
       .from(albumAssets)
       .innerJoin(assets, eq(assets.id, albumAssets.assetId))
-      .where(and(eq(albumAssets.albumId, album.id), isNull(assets.trashedAt)))
+      .where(
+        and(
+          eq(albumAssets.albumId, album.id),
+          eq(assets.intake, 'library'),
+          isNull(assets.trashedAt),
+        ),
+      )
       .orderBy(sql`${assets.capturedAt} desc nulls last`, desc(assets.id))
       .offset(offset)
       .limit(query.limit + 1);

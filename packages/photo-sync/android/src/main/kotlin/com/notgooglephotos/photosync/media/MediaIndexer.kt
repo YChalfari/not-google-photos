@@ -42,7 +42,24 @@ class MediaIndexer(
             val sinceGeneration = if (canResume && volume.generation != null) previous?.generation else null
             // Without generations (Android 10), re-read anything added or modified since the last scan began.
             val sinceSeconds = if (canResume && volume.generation == null) previous?.scannedAt?.let { it / 1000 - 2 } else null
-            val rows = library.query(volume.name, kinds, settings.folders, sinceGeneration, sinceSeconds)
+            val folderRows = library.query(volume.name, kinds, settings.folders, sinceGeneration, sinceSeconds)
+            val extra = if (settings.includeOtherPhotos) {
+                library.queryAllImages(volume.name, sinceGeneration, sinceSeconds)
+            } else {
+                emptyList()
+            }
+            val merged = LinkedHashMap<Long, ScannedMedia>()
+            for (row in folderRows) merged[row.mediaId] = row
+            for (row in extra) merged.putIfAbsent(row.mediaId, row)
+            val rows = merged.values.mapNotNull { media ->
+                val intake = IntakeRules.decide(
+                    media.relativePath,
+                    media.kind,
+                    media.mimeType,
+                    settings.includeOtherPhotos,
+                ) ?: return@mapNotNull null
+                media.copy(intake = intake)
+            }
             for (batch in rows.chunked(BATCH_SIZE)) {
                 val counts = db.media().upsertScanned(batch, stamp, clock.now(), backlogBeforeSec)
                 added += counts.added

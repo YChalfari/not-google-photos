@@ -8,6 +8,7 @@ import com.notgooglephotos.photosync.media.ScannedMedia
 import com.notgooglephotos.photosync.model.SyncSettings
 import com.notgooglephotos.photosync.model.SyncTrigger
 import com.notgooglephotos.photosync.model.TimeOfDay
+import com.notgooglephotos.photosync.queue.ItemIntake
 import com.notgooglephotos.photosync.queue.ItemState
 import com.notgooglephotos.photosync.queue.MediaKind
 import com.notgooglephotos.photosync.queue.SyncDatabase
@@ -95,6 +96,8 @@ class QueueAndSettingsTest {
         assertTrue(store.isConfigured)
         val again = SyncSettings.fromJson(JSONObject(store.settings.toJson().toString()))
         assertEquals(merged, again)
+        assertTrue(merged.includeOtherPhotos)
+        assertTrue(SyncSettings.grew(SyncSettings(includeOtherPhotos = false), SyncSettings()))
         assertTrue(SyncSettings.grew(SyncSettings(), merged.copy(includeVideos = true)))
         assertFalse(SyncSettings.grew(merged, merged.copy(folders = listOf("DCIM/Camera/"))))
         val triggers = SyncTrigger.listFromJson(
@@ -122,6 +125,26 @@ class QueueAndSettingsTest {
         assertFalse(sql.contains("generation_modified"))
         assertTrue(sql.contains("date_added >= ?"))
         assertEquals(listOf("DCIM/%", "50", "50"), args)
+    }
+
+    @Test
+    fun aBackedUpScreenshotStaysInTheLibrary() = runBlocking {
+        val media = db.media()
+        val shot = row(1, size = 8, modified = 2, added = 20).copy(relativePath = "DCIM/Screenshots/")
+        media.upsertScanned(listOf(shot), 1, 1, 0)
+        val stored = media.all().single()
+        media.markBackedUp(listOf(stored.id), "asset-shot", 2)
+        media.upsertScanned(listOf(shot.copy(intake = ItemIntake.REVIEW)), 4, 4, 0)
+        val again = media.all().single()
+        assertEquals(ItemState.BACKED_UP, again.state)
+        assertEquals(ItemIntake.LIBRARY, again.intake)
+
+        val pending = row(2, size = 8, modified = 2, added = 20)
+        media.upsertScanned(listOf(pending), 5, 5, 0)
+        media.upsertScanned(listOf(pending.copy(intake = ItemIntake.REVIEW)), 6, 6, 0)
+        val reviewed = media.all().first { it.mediaId == 2L }
+        assertEquals(ItemState.PENDING, reviewed.state)
+        assertEquals(ItemIntake.REVIEW, reviewed.intake)
     }
 
     private fun row(id: Long, size: Long, modified: Long, added: Long, capture: Long = added * 1000) = ScannedMedia(

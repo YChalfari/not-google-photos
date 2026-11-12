@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { CLIP_EMBEDDING_DIMENSIONS, FACE_EMBEDDING_DIMENSIONS } from '@ngp/shared';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { AppContext } from '../context';
 import {
   assetEmbeddings,
@@ -103,6 +103,28 @@ export async function recognizeAsset(ctx: AppContext, assetId: string): Promise<
         return [{ slug: tag.slug, name: tag.name, label: tag.label, confidence }];
       })
     : [];
+
+  if (asset.intake === 'review') {
+    const libraryKnown = await libraryPeople(ctx, asset.ownerId);
+    const matched = detected.some((face) => {
+      const assignment = choosePerson({
+        embedding: face.embedding,
+        quality: face.quality,
+        known: libraryKnown,
+        rejectedPersonIds: new Set(),
+        thresholds: {
+          matchMaxDistance: advice.matchMaxDistance,
+          seedMinQuality: advice.seedMinQuality,
+        },
+      });
+      return assignment.kind === 'existing';
+    });
+    if (!matched) {
+      await setSteps(ctx, assetId, { faces: 'done', tags: 'skipped' });
+      return;
+    }
+    await ctx.db.update(assets).set({ intake: 'library' }).where(eq(assets.id, assetId));
+  }
 
   const touchedPeople = await ctx.db.transaction(async (tx) => {
     const manual = await tx
@@ -259,6 +281,30 @@ export async function scheduleRecognition(ctx: AppContext, assetId: string): Pro
     return;
   }
   await recognizeAsset(ctx, assetId);
+}
+
+/** People who already have a face on a library photo. A new group does not count. */
+async function libraryPeople(ctx: AppContext, ownerId: string): Promise<KnownFace[]> {
+  const rows = await ctx.db
+    .select({ personId: faces.personId, embedding: faces.embedding })
+    .from(faces)
+    .innerJoin(assets, eq(assets.id, faces.assetId))
+    .where(
+      and(
+        eq(faces.ownerId, ownerId),
+        eq(faces.ignored, false),
+        eq(assets.intake, 'library'),
+        isNull(assets.trashedAt),
+      ),
+    );
+  const known: KnownFace[] = [];
+  for (const row of rows) {
+    if (!row.personId) continue;
+    const embedding = parseVector(row.embedding);
+    if (!embedding) continue;
+    known.push({ personId: row.personId, embedding });
+  }
+  return known;
 }
 
 async function analysisImage(

@@ -57,12 +57,14 @@ abstract class MediaDao {
                             lastError = null,
                             serverAssetId = if (wasBackedUp) null else row.serverAssetId,
                             versionOf = if (wasBackedUp) row.serverAssetId else row.versionOf,
+                            intake = media.intake,
                         ),
                     )
                     changed++
                 }
-                row.hasSameMetadata(media) && row.present -> untouched += row.id
-                else -> update(row.withMetadata(media, scanStamp))
+                row.hasSameMetadata(media) && row.present &&
+                    (row.intake == media.intake || row.state.keepsIntake()) -> untouched += row.id
+                else -> update(row.withMetadata(media, scanStamp).copy(intake = media.intake))
             }
         }
         untouched.chunked(500).forEach { touch(it, scanStamp) }
@@ -140,7 +142,8 @@ abstract class MediaDao {
     @Query(
         """
         SELECT kind, COUNT(*) AS count FROM media_items
-        WHERE present = 1 AND state != 'BACKED_UP' AND capture_time >= :startMs AND capture_time < :endMs
+        WHERE present = 1 AND state IN ('PENDING', 'UPLOADING', 'FAILED')
+          AND capture_time >= :startMs AND capture_time < :endMs
         GROUP BY kind
         """,
     )
@@ -168,6 +171,35 @@ abstract class MediaDao {
         """,
     )
     abstract suspend fun markBackedUp(ids: List<Long>, assetId: String?, now: Long)
+
+    /** On the server, still waiting for a yes or a known face. Not eligible for free-up. */
+    @Query(
+        """
+        UPDATE media_items SET state = 'HELD', server_asset_id = :assetId, backed_up_at = :now, attempts = 0, last_error = NULL
+        WHERE id IN (:ids)
+        """,
+    )
+    abstract suspend fun markHeld(ids: List<Long>, assetId: String?, now: Long)
+
+    /** The owner said no, or the file is junk that was queued earlier. Do not upload it. */
+    @Query(
+        """
+        UPDATE media_items SET state = 'SKIPPED', server_asset_id = NULL, attempts = 0, last_error = NULL
+        WHERE id IN (:ids)
+        """,
+    )
+    abstract suspend fun markSkipped(ids: List<Long>)
+
+    @Query(
+        """
+        SELECT * FROM media_items
+        WHERE present = 1 AND state = 'HELD' AND checksum IS NOT NULL
+        """,
+    )
+    abstract suspend fun heldPresent(): List<MediaItemEntity>
+
+    @Query("UPDATE media_items SET state = 'PENDING', attempts = 0, last_error = NULL WHERE id IN (:ids)")
+    abstract suspend fun markPending(ids: List<Long>)
 
     /** The file was "changed" but hashes the same as before (only its timestamp moved): it's still backed up. */
     @Query(
@@ -239,6 +271,9 @@ abstract class MediaDao {
     abstract suspend fun delete(id: Long)
 }
 
+private fun ItemState.keepsIntake(): Boolean =
+    this == ItemState.BACKED_UP || this == ItemState.HELD || this == ItemState.SKIPPED
+
 private fun ScannedMedia.toNewEntity(now: Long, scanStamp: Long, backlog: Boolean) = MediaItemEntity(
     volume = volume,
     mediaId = mediaId,
@@ -255,6 +290,7 @@ private fun ScannedMedia.toNewEntity(now: Long, scanStamp: Long, backlog: Boolea
     backlog = backlog,
     firstSeenAt = now,
     lastSeenScan = scanStamp,
+    intake = intake,
 )
 
 private fun MediaItemEntity.hasSameMetadata(media: ScannedMedia) =

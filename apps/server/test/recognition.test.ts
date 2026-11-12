@@ -177,6 +177,52 @@ describe('recognition on a library', () => {
     expect(moved.status).toBe(200);
     expect(moved.data.face.personId).toBe(group!.id);
   }, 30_000);
+
+  it('promotes a review photo only when the face is already in the library', async () => {
+    const user = await createUser(t.ctx, { email: 'review-faces@example.com' });
+    const client = await signIn(t.app, user.email);
+
+    const library = await insertAsset(t.ctx, user.id, { filename: 'library.jpg' });
+    await insertDerivedFile(t.ctx, library.id, 'preview', Buffer.from([1, 9, 9, 9]));
+    await t.ctx.db
+      .update(assets)
+      .set({ processingState: 'ready', processingSteps: { thumbnails: 'done', metadata: 'done' } })
+      .where(eq(assets.id, library.id));
+    await recognizeAsset(t.ctx, library.id);
+
+    const known = await insertAsset(t.ctx, user.id, { filename: 'known.jpg', intake: 'review' });
+    await insertDerivedFile(t.ctx, known.id, 'preview', Buffer.from([1, 8, 8, 8]));
+    await t.ctx.db
+      .update(assets)
+      .set({ processingState: 'ready', processingSteps: { thumbnails: 'done', metadata: 'done' } })
+      .where(eq(assets.id, known.id));
+    await recognizeAsset(t.ctx, known.id);
+    const [promoted] = await t.ctx.db.select().from(assets).where(eq(assets.id, known.id));
+    expect(promoted?.intake).toBe('library');
+
+    const stranger = await insertAsset(t.ctx, user.id, { filename: 'stranger.jpg', intake: 'review' });
+    await insertDerivedFile(t.ctx, stranger.id, 'preview', Buffer.from([2, 7, 7, 7]));
+    await t.ctx.db
+      .update(assets)
+      .set({ processingState: 'ready', processingSteps: { thumbnails: 'done', metadata: 'done' } })
+      .where(eq(assets.id, stranger.id));
+    await recognizeAsset(t.ctx, stranger.id);
+    const [waiting] = await t.ctx.db.select().from(assets).where(eq(assets.id, stranger.id));
+    expect(waiting?.intake).toBe('review');
+    expect(waiting?.processingSteps).toMatchObject({ faces: 'done', tags: 'skipped' });
+
+    const people = await client.call('people.list');
+    expect(people.data.people).toHaveLength(1);
+    expect(people.data.people[0]?.faceCount).toBe(2);
+
+    const month = await client.call('timeline.bucket', {
+      params: { key: '2024-07' },
+      query: { scope: 'library', withShared: 'false' },
+    });
+    expect(month.data.assets.map((asset) => asset.id).sort()).toEqual([known.id, library.id].sort());
+    const review = await client.call('assets.review', { query: { limit: 20 } });
+    expect(review.data.items.map((item) => item.id)).toEqual([stranger.id]);
+  }, 30_000);
 });
 
 async function handleMl(request: IncomingMessage, response: ServerResponse): Promise<void> {

@@ -92,7 +92,11 @@ describe('asset upload, thumbnails, and verify', () => {
       body: form.body,
     });
     expect(again.status).toBe(200);
-    expect(await again.json()).toEqual({ assetId: uploaded.assetId, status: 'duplicate' });
+    expect(await again.json()).toEqual({
+      assetId: uploaded.assetId,
+      status: 'duplicate',
+      intake: 'library',
+    });
 
     const present = await phone.call('assets.check', { body: { checksums: [checksum] } });
     expect(present.data.present).toEqual([{ checksum, assetId: uploaded.assetId }]);
@@ -269,5 +273,118 @@ describe('asset upload, thumbnails, and verify', () => {
       query: { scope: 'archive', withShared: 'true' },
     });
     expect(archive.data.buckets).toEqual([{ key: '2025-01', count: 1 }]);
+  });
+
+  it('keeps other photos out of the library until they are kept or refused', async () => {
+    const alex = await createUser(t.ctx, { email: 'hold@example.com' });
+    const sam = await createUser(t.ctx, { email: 'sam-hold@example.com' });
+    const browser = await signIn(t.app, alex.email);
+    const samBrowser = await signIn(t.app, sam.email);
+    const bytes = await jpeg({ r: 40, g: 20, b: 180 });
+    const checksum = sha1(bytes);
+    const form = multipart(
+      {
+        checksum,
+        filename: 'download.jpg',
+        capturedAt: '2024-08-01T12:00:00.000Z',
+        intake: 'review',
+      },
+      { name: 'download.jpg', type: 'image/jpeg', bytes },
+    );
+    const created = await browser.fetch('/api/assets', {
+      method: 'POST',
+      headers: { 'content-type': form.contentType },
+      body: form.body,
+    });
+    expect(created.status, await created.clone().text()).toBe(201);
+    const uploaded = (await created.json()) as { assetId: string; status: string; intake: string };
+    expect(uploaded).toMatchObject({ status: 'created', intake: 'review' });
+
+    const library = await browser.call('timeline.buckets', {
+      query: { scope: 'library', withShared: 'true' },
+    });
+    expect(library.data.buckets).toEqual([]);
+    const waiting = await browser.call('assets.review', { query: { limit: 50 } });
+    expect(waiting.status).toBe(200);
+    expect(waiting.data.total).toBe(1);
+    expect(waiting.data.items.map((item) => item.id)).toEqual([uploaded.assetId]);
+
+    const held = await browser.call('assets.check', { body: { checksums: [checksum] } });
+    expect(held.data.held).toEqual([{ checksum, assetId: uploaded.assetId }]);
+    expect(held.data.present).toEqual([]);
+    expect(held.data.missing).toEqual([]);
+    expect(held.data.rejected).toEqual([]);
+
+    const detail = await browser.call('assets.get', { params: { id: uploaded.assetId } });
+    expect(detail.status).toBe(200);
+    const hidden = await samBrowser.call('assets.get', { params: { id: uploaded.assetId } });
+    expect(hidden.status).toBe(404);
+
+    const verified = await browser.call('assets.verify', {
+      body: { items: [{ checksum, size: bytes.length }] },
+    });
+    expect(verified.data.results).toEqual([
+      { checksum, assetId: null, status: 'missing' },
+    ]);
+
+    const duplicate = await browser.fetch('/api/assets', {
+      method: 'POST',
+      headers: { 'content-type': form.contentType },
+      body: form.body,
+    });
+    expect(duplicate.status).toBe(200);
+    expect(await duplicate.json()).toEqual({
+      assetId: uploaded.assetId,
+      status: 'duplicate',
+      intake: 'review',
+    });
+
+    const kept = await browser.call('assets.acceptReview', { body: { ids: [uploaded.assetId] } });
+    expect(kept.status).toBe(200);
+    expect(kept.data.updated).toBe(1);
+    const month = await browser.call('timeline.bucket', {
+      params: { key: '2024-08' },
+      query: { scope: 'library', withShared: 'false' },
+    });
+    expect(month.data.assets.map((asset) => asset.id)).toEqual([uploaded.assetId]);
+    const empty = await browser.call('assets.review', { query: { limit: 10 } });
+    expect(empty.data.total).toBe(0);
+
+    const refusedBytes = await jpeg({ r: 1, g: 2, b: 3 });
+    const refusedChecksum = sha1(refusedBytes);
+    const refusedForm = multipart(
+      {
+        checksum: refusedChecksum,
+        filename: 'nope.jpg',
+        capturedAt: '2024-08-02T12:00:00.000Z',
+        intake: 'review',
+      },
+      { name: 'nope.jpg', type: 'image/jpeg', bytes: refusedBytes },
+    );
+    const refused = await browser.fetch('/api/assets', {
+      method: 'POST',
+      headers: { 'content-type': refusedForm.contentType },
+      body: refusedForm.body,
+    });
+    const refusedBody = (await refused.json()) as { assetId: string };
+    const rejected = await browser.call('assets.rejectReview', {
+      body: { ids: [refusedBody.assetId] },
+    });
+    expect(rejected.data.deleted).toBe(1);
+    const afterNo = await browser.call('assets.check', { body: { checksums: [refusedChecksum] } });
+    expect(afterNo.data.rejected).toEqual([refusedChecksum]);
+    expect(afterNo.data.missing).toEqual([]);
+    const again = await browser.fetch('/api/assets', {
+      method: 'POST',
+      headers: { 'content-type': refusedForm.contentType },
+      body: refusedForm.body,
+    });
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual({ assetId: null, status: 'rejected', intake: null });
+    const still = await browser.call('timeline.bucket', {
+      params: { key: '2024-08' },
+      query: { scope: 'library', withShared: 'false' },
+    });
+    expect(still.data.assets.map((asset) => asset.id)).toEqual([uploaded.assetId]);
   });
 });

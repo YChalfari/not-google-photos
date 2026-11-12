@@ -10,6 +10,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Dao
 interface RunDao {
@@ -76,7 +78,7 @@ interface MemoryDao {
 
 @Database(
     entities = [MediaItemEntity::class, SyncRunEntity::class, ScanStateEntity::class, MemoryEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class SyncDatabase : RoomDatabase() {
@@ -89,7 +91,15 @@ abstract class SyncDatabase : RoomDatabase() {
         const val NAME = "ngp-photosync.db"
 
         fun open(context: Context): SyncDatabase =
-            Room.databaseBuilder(context.applicationContext, SyncDatabase::class.java, NAME).build()
+            Room.databaseBuilder(context.applicationContext, SyncDatabase::class.java, NAME)
+                .addMigrations(MIGRATION_1_2)
+                .build()
+
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE media_items ADD COLUMN intake TEXT NOT NULL DEFAULT 'LIBRARY'")
+            }
+        }
 
         fun inMemory(context: Context): SyncDatabase =
             Room.inMemoryDatabaseBuilder(context.applicationContext, SyncDatabase::class.java).allowMainThreadQueries().build()

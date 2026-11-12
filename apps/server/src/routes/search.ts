@@ -122,7 +122,11 @@ export const searchHandlers: Handlers = {
         ? await similarAssetIds(ctx, userId, text, 200)
         : null;
 
-    const filters: SQL[] = [eq(assets.ownerId, userId), isNull(assets.trashedAt)];
+    const filters: SQL[] = [
+      eq(assets.ownerId, userId),
+      eq(assets.intake, 'library'),
+      isNull(assets.trashedAt),
+    ];
     if (query.tag) {
       const slug = slugsInText(query.tag)[0] ?? query.tag.toLowerCase();
       filters.push(hasTagSlug(slug));
@@ -203,6 +207,7 @@ export const searchHandlers: Handlers = {
         .where(
           and(
             eq(assets.ownerId, userId),
+            eq(assets.intake, 'library'),
             isNull(assets.trashedAt),
             inArray(tags.slug, slugsInText(q).concat(q.toLowerCase())),
           ),
@@ -212,7 +217,14 @@ export const searchHandlers: Handlers = {
       ctx.db
         .select({ city: assets.city })
         .from(assets)
-        .where(and(eq(assets.ownerId, userId), isNull(assets.trashedAt), ilike(assets.city, `%${q}%`)))
+        .where(
+          and(
+            eq(assets.ownerId, userId),
+            eq(assets.intake, 'library'),
+            isNull(assets.trashedAt),
+            ilike(assets.city, `%${q}%`),
+          ),
+        )
         .groupBy(assets.city)
         .limit(3),
     ]);
@@ -243,7 +255,8 @@ export const searchHandlers: Handlers = {
 
   'explore.get': async ({ ctx, auth }) => {
     const userId = auth.user.id;
-    const owned = () => and(eq(assets.ownerId, userId), isNull(assets.trashedAt));
+    const owned = () =>
+      and(eq(assets.ownerId, userId), eq(assets.intake, 'library'), isNull(assets.trashedAt));
     const [peopleRows, placeRows, thingRows, videoRow, screenshotRow] = await Promise.all([
       ctx.db
         .select()

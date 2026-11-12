@@ -30,6 +30,7 @@ export async function similarAssetIds(
     join assets on assets.id = asset_embeddings.asset_id
     where assets.owner_id = ${userId}
       and assets.trashed_at is null
+      and assets.intake = 'library'
       and (asset_embeddings.embedding <=> ${literal}::vector) <= ${MAX_DISTANCE}
     order by asset_embeddings.embedding <=> ${literal}::vector
     limit ${limit}
