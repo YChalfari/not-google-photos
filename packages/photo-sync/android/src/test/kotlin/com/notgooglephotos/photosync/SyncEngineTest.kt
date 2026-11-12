@@ -429,11 +429,14 @@ class SyncEngineTest {
     fun turningOtherPhotosOffStillReviewsScreenshots() {
         fx.store.settings = fx.store.settings.copy(includeOtherPhotos = false)
         fx.add("screen.png", bytes = "screen".toByteArray(), folder = "DCIM/Screenshots/")
+        fx.add("pictures.png", bytes = "pictures".toByteArray(), folder = "Pictures/Screenshots/")
         fx.add("dl.jpg", bytes = "download".toByteArray(), folder = "Download/")
         fx.run(RunTrigger.MANUAL)
-        val rows = fx.rows()
-        assertEquals(listOf("screen.png"), rows.map { it.displayName })
-        assertEquals(ItemState.HELD, rows.single().state)
+        val rows = fx.rows().associateBy { it.displayName }
+        assertEquals(setOf("screen.png", "pictures.png"), rows.keys)
+        assertEquals(ItemState.HELD, rows.getValue("screen.png").state)
+        assertEquals(ItemState.HELD, rows.getValue("pictures.png").state)
+        assertEquals(2, fx.server.uploads.size)
     }
 
     @Test

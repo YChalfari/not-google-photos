@@ -287,27 +287,23 @@ export const assetHandlers: Handlers = {
 
   'assets.rejectReview': async ({ ctx, auth, body }) => {
     const deleted = await ctx.db.transaction(async (tx) => {
+      // Delete only while the row is still in review, then remember that checksum.
+      // Recognition can move the same row into the library between a select and a delete.
       const rows = await tx
-        .select({ id: assets.id, checksum: assets.checksumSha1 })
-        .from(assets)
+        .delete(assets)
         .where(
           and(
             eq(assets.ownerId, auth.user.id),
             eq(assets.intake, 'review'),
             inArray(assets.id, body.ids),
           ),
-        );
+        )
+        .returning({ checksum: assets.checksumSha1 });
       if (rows.length === 0) return 0;
       await tx
         .insert(rejectedChecksums)
         .values(rows.map((row) => ({ ownerId: auth.user.id, sha1: row.checksum })))
         .onConflictDoNothing();
-      await tx.delete(assets).where(
-        inArray(
-          assets.id,
-          rows.map((row) => row.id),
-        ),
-      );
       return rows.length;
     });
     return { deleted };

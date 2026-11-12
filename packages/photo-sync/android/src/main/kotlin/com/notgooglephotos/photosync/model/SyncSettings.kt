@@ -26,9 +26,14 @@ data class SyncSettings(
 ) {
     val hasServer: Boolean get() = homeUrl != null || remoteUrl != null
 
-    /** Stable key for "which items are in scope", so the scanner knows when a full rescan is needed. */
+    /**
+     * Stable key for "which items are in scope", so the scanner knows when a full rescan is needed.
+     * `outside=screenshots` forces one full scan after screenshots outside the selected folders
+     * started being reviewed even with other photos turned off.
+     */
     val selectionKey: String
-        get() = folders.sorted().joinToString("|") + "|videos=$includeVideos|other=$includeOtherPhotos"
+        get() = folders.sorted().joinToString("|") +
+            "|videos=$includeVideos|other=$includeOtherPhotos|outside=screenshots"
 
     fun toJson(): JSONObject = JSONObject()
         .put("enabled", enabled)

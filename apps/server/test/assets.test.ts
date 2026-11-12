@@ -386,5 +386,19 @@ describe('asset upload, thumbnails, and verify', () => {
       query: { scope: 'library', withShared: 'false' },
     });
     expect(still.data.assets.map((asset) => asset.id)).toEqual([uploaded.assetId]);
+
+    const refusedLibrary = await browser.call('assets.rejectReview', {
+      body: { ids: [uploaded.assetId] },
+    });
+    expect(refusedLibrary.data.deleted).toBe(0);
+    const keptChecksum = sha1(bytes);
+    const keptCheck = await browser.call('assets.check', { body: { checksums: [keptChecksum] } });
+    expect(keptCheck.data.present).toEqual([{ checksum: keptChecksum, assetId: uploaded.assetId }]);
+    expect(keptCheck.data.rejected).toEqual([]);
+    const stillKept = await browser.call('timeline.bucket', {
+      params: { key: '2024-08' },
+      query: { scope: 'library', withShared: 'false' },
+    });
+    expect(stillKept.data.assets.map((asset) => asset.id)).toEqual([uploaded.assetId]);
   });
 });

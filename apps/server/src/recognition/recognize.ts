@@ -123,7 +123,13 @@ export async function recognizeAsset(ctx: AppContext, assetId: string): Promise<
       await setSteps(ctx, assetId, { faces: 'done', tags: 'skipped' });
       return;
     }
-    await ctx.db.update(assets).set({ intake: 'library' }).where(eq(assets.id, assetId));
+    // Only move it if it is still waiting. Accept and reject decide the same row concurrently.
+    const promoted = await ctx.db
+      .update(assets)
+      .set({ intake: 'library' })
+      .where(and(eq(assets.id, assetId), eq(assets.intake, 'review'), isNull(assets.trashedAt)))
+      .returning({ id: assets.id });
+    if (promoted.length === 0) return;
   }
 
   const touchedPeople = await ctx.db.transaction(async (tx) => {

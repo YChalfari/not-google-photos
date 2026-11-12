@@ -2,6 +2,7 @@ package com.notgooglephotos.photosync.media
 
 import com.notgooglephotos.photosync.engine.Clock
 import com.notgooglephotos.photosync.model.SyncSettings
+import com.notgooglephotos.photosync.queue.ItemIntake
 import com.notgooglephotos.photosync.queue.MediaKind
 import com.notgooglephotos.photosync.queue.ScanStateEntity
 import com.notgooglephotos.photosync.queue.SyncDatabase
@@ -43,10 +44,20 @@ class MediaIndexer(
             // Without generations (Android 10), re-read anything added or modified since the last scan began.
             val sinceSeconds = if (canResume && volume.generation == null) previous?.scannedAt?.let { it / 1000 - 2 } else null
             val folderRows = library.query(volume.name, kinds, settings.folders, sinceGeneration, sinceSeconds)
+            // Screenshots and camera scans are still reviewed when other folders are off, and those
+            // files often live outside the selected folders (Pictures/Screenshots on current Android).
+            val allImages = library.queryAllImages(volume.name, sinceGeneration, sinceSeconds)
             val extra = if (settings.includeOtherPhotos) {
-                library.queryAllImages(volume.name, sinceGeneration, sinceSeconds)
+                allImages
             } else {
-                emptyList()
+                allImages.filter { media ->
+                    IntakeRules.decide(
+                        media.relativePath,
+                        media.kind,
+                        media.mimeType,
+                        includeOtherPhotos = false,
+                    ) == ItemIntake.REVIEW
+                }
             }
             val merged = LinkedHashMap<Long, ScannedMedia>()
             for (row in folderRows) merged[row.mediaId] = row
