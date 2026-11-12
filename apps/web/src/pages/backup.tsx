@@ -70,7 +70,7 @@ function PhoneBackup() {
   const startedBackup = useRef(false);
   const status = statusQuery.data ?? null;
   const permissions = permissionsQuery.data ?? null;
-  const requireCharging = settingsQuery.data?.settings.requireCharging ?? true;
+  const requireCharging = settingsQuery.data?.settings.requireCharging ?? false;
   const includeOtherPhotos = settingsQuery.data?.settings.includeOtherPhotos ?? true;
 
   useEffect(() => {
@@ -177,7 +177,10 @@ function PhoneBackup() {
           ) : (
             <LoadingBlock label="Checking backup" />
           )}
-          {status && status.phase === 'idle' && status.firstBackup.remaining > 0 ? (
+          {status &&
+          status.phase === 'idle' &&
+          status.firstBackup.remaining > 0 &&
+          requireCharging ? (
             <p className="mt-4 text-sm text-muted-foreground">
               {status.firstBackup.remaining.toLocaleString()} older photos stay in Pending until
               this phone is charging on Wi-Fi. Back up now sends them without waiting.
@@ -266,8 +269,8 @@ function PhoneBackup() {
               Also back up photos from Downloads, WhatsApp, and other folders
               <span className="mt-1 block text-muted-foreground">
                 Those photos wait in Review unless they show someone you marked Important.
-                Screenshots and camera scans always wait there. The first time this is on, older
-                photos wait for Wi-Fi and charging.
+                Screenshots and camera scans always wait there. Older photos upload on Wi-Fi, and
+                wait for a charger only when the option below is on.
               </span>
             </span>
           </label>
@@ -275,19 +278,19 @@ function PhoneBackup() {
             <input
               type="checkbox"
               className="mt-0.5 size-4 accent-primary"
-              checked={!requireCharging}
+              checked={requireCharging}
               disabled={busy !== null || !settingsQuery.data}
               onChange={(event) =>
                 void run('charging', () =>
-                  PhotoSync.configure({ requireCharging: !event.target.checked }),
+                  PhotoSync.configure({ requireCharging: event.target.checked }),
                 )
               }
             />
             <span>
-              Back up even when this phone isn&apos;t plugged in
+              Only back up while this phone is charging
               <span className="mt-1 block text-muted-foreground">
-                Older photos and videos then upload on Wi-Fi without waiting to charge. This uses
-                more battery.
+                Older photos and videos then wait until the phone is plugged in. Leave this off to
+                upload on Wi-Fi without a charger.
               </span>
             </span>
           </label>

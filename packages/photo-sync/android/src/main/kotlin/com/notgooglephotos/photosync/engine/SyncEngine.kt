@@ -138,6 +138,7 @@ class SyncEngine(
 
         private suspend fun steps(): RunOutcome {
             adoptOtherPhotos()
+            store.stopWaitingForChargerUnlessChosen()
             val settings = store.settings
             if (!store.isConfigured) return RunOutcome.NOT_CONFIGURED
             if (store.needsPairing) return RunOutcome.NEEDS_PAIRING
@@ -446,7 +447,7 @@ class SyncEngine(
 
         /**
          * Installs that predate other-photo backup start that pile as a first backup, so older
-         * files wait for Wi-Fi and charging instead of uploading on the next hourly run.
+         * files go out on Wi-Fi. They wait for a charger only when that option is on.
          */
         private fun adoptOtherPhotos() {
             val raw = store.peekSettingsJson() ?: return

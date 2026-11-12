@@ -393,6 +393,7 @@ class EngineFixture(context: Context) {
             unreachableNudgeDays = 3,
         )
         store.deviceToken = "device-token"
+        store.keepSavedChargingChoice()
         store.firstBackupComplete = true
         store.configuredAt = clock.nowMs
     }

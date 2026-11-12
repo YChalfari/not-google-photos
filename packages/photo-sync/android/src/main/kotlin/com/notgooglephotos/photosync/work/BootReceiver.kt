@@ -19,6 +19,7 @@ class BootReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val runtime = PhotoSyncRuntime.get(context)
+                runtime.store.stopWaitingForChargerUnlessChosen()
                 runtime.scheduler.apply(recomputeTimes = timeChanged)
                 runtime.memories.reschedule()
             } finally {

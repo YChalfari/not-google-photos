@@ -18,8 +18,8 @@ data class SyncSettings(
      */
     val includeOtherPhotos: Boolean = true,
     val wifiOnly: Boolean = true,
-    /** First backup and videos wait until the phone is plugged in. */
-    val requireCharging: Boolean = true,
+    /** When true, the first backup and videos wait until the phone is plugged in. */
+    val requireCharging: Boolean = false,
     val videosOnlyWhileCharging: Boolean = true,
     val reminderTime: LocalTime? = DEFAULT_REMINDER_TIME,
     val unreachableNudgeDays: Int = 3,
@@ -83,7 +83,7 @@ data class SyncSettings(
             includeVideos = json.optBoolean("includeVideos", true),
             includeOtherPhotos = json.optBoolean("includeOtherPhotos", true),
             wifiOnly = json.optBoolean("wifiOnly", true),
-            requireCharging = json.optBoolean("requireCharging", true),
+            requireCharging = json.optBoolean("requireCharging", false),
             videosOnlyWhileCharging = json.optBoolean("videosOnlyWhileCharging", true),
             reminderTime = if (json.has("reminderTime")) json.optStringOrNull("reminderTime")?.let(TimeOfDay::parse) else DEFAULT_REMINDER_TIME,
             unreachableNudgeDays = json.optInt("unreachableNudgeDays", 3),

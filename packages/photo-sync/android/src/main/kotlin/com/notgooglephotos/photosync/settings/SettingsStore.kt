@@ -49,7 +49,27 @@ class SettingsStore(context: Context, private val cipher: TokenCipher) {
             if (value == null) remove(KEY_MEMORY_TIME) else putString(KEY_MEMORY_TIME, TimeOfDay.format(value))
         }
 
-    /** Items added to MediaStore before this time belong to the first full backup (Wi-Fi and charging only). */
+    /**
+     * Older builds waited for a charger unless the user opted out. Waiting is now only when
+     * "only back up while charging" is checked, so an existing install stops waiting once.
+     * Returns true when a saved choice was changed and the schedule should be applied again.
+     */
+    @Synchronized
+    fun stopWaitingForChargerUnlessChosen(): Boolean {
+        if (prefs.getBoolean(KEY_CHARGING_MIGRATED, false)) return false
+        val hadSettings = peekSettingsJson() != null
+        val waiting = hadSettings && settings.requireCharging
+        if (waiting) updateSettings { it.copy(requireCharging = false) }
+        prefs.edit { putBoolean(KEY_CHARGING_MIGRATED, true) }
+        return waiting
+    }
+
+    /** Tests set this so they can choose requireCharging without the one-time migration clearing it. */
+    fun keepSavedChargingChoice() {
+        prefs.edit { putBoolean(KEY_CHARGING_MIGRATED, true) }
+    }
+
+    /** Items added to MediaStore before this time belong to the first full backup. */
     var backlogCutoffMs: Long? by longOrNull("backlogCutoffMs")
     var firstBackupComplete: Boolean by boolean("firstBackupComplete")
     var needsPairing: Boolean by boolean("needsPairing")
@@ -100,6 +120,7 @@ class SettingsStore(context: Context, private val cipher: TokenCipher) {
     companion object {
         const val FILE = "ngp_photosync"
         internal const val KEY_SETTINGS = "settings"
+        private const val KEY_CHARGING_MIGRATED = "chargingOptInMigrated"
         private const val KEY_TRIGGERS = "triggers"
         private const val KEY_TOKEN = "deviceToken"
         private const val KEY_MEMORY_TIME = "memoryNotificationTime"

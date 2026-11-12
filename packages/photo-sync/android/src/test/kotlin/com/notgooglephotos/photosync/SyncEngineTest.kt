@@ -245,6 +245,7 @@ class SyncEngineTest {
 
     @Test
     fun firstBackupHoldsOlderItemsForWifiAndCharging() {
+        fx.store.settings = fx.store.settings.copy(requireCharging = true)
         fx.store.firstBackupComplete = false
         fx.store.backlogCutoffMs = fx.clock.nowMs
         val cutoff = fx.clock.nowMs / 1000
@@ -322,6 +323,7 @@ class SyncEngineTest {
 
     @Test
     fun videosWaitUntilThePhoneIsCharging() {
+        fx.store.settings = fx.store.settings.copy(requireCharging = true)
         fx.conditions.charging = false
         fx.add("still.jpg", captureTime = 2)
         fx.add("clip.mp4", bytes = "video".toByteArray(), kind = MediaKind.VIDEO, captureTime = 1)
@@ -437,7 +439,7 @@ class SyncEngineTest {
     }
 
     @Test
-    fun enablingOtherPhotosOnAnOlderInstallWaitsForCharging() {
+    fun enablingOtherPhotosOnAnOlderInstallUploadsWithoutWaitingForACharger() {
         val raw = JSONObject(fx.store.peekSettingsJson().toString())
         raw.remove("includeOtherPhotos")
         context.getSharedPreferences(SettingsStore.FILE, Context.MODE_PRIVATE)
@@ -448,14 +450,11 @@ class SyncEngineTest {
         fx.conditions.charging = false
         fx.add("old.jpg", bytes = "old".toByteArray(), folder = "Download/", dateAdded = 10, captureTime = 10_000)
         val report = fx.run(RunTrigger.INTERVAL)
-        assertEquals(RunOutcome.NOTHING_TO_DO, report.outcome)
-        assertEquals(0, fx.server.uploads.size)
-        assertEquals(false, fx.store.firstBackupComplete)
+        assertEquals(RunOutcome.COMPLETED, report.outcome)
+        assertEquals(listOf("old.jpg"), fx.server.uploads.map { it.fileName })
+        assertEquals(true, fx.store.firstBackupComplete)
         assertTrue(fx.store.peekSettingsJson()!!.getBoolean("includeOtherPhotos"))
-        val row = fx.rows().single()
-        assertEquals(true, row.backlog)
-        assertEquals(ItemState.PENDING, row.state)
-        assertTrue(fx.follow.events.contains("firstBackup"))
+        assertEquals(ItemState.HELD, fx.rows().single().state)
     }
 
     @Test

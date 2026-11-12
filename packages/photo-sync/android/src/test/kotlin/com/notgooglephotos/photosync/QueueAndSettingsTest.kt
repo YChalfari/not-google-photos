@@ -110,6 +110,18 @@ class QueueAndSettingsTest {
     }
 
     @Test
+    fun savedChargingWaitTurnsOffOnce() {
+        val store = SettingsStore(context, PlainTokenCipher())
+        context.getSharedPreferences(SettingsStore.FILE, Context.MODE_PRIVATE).edit().clear().commit()
+        store.settings = SyncSettings(requireCharging = true)
+        assertTrue(store.stopWaitingForChargerUnlessChosen())
+        assertFalse(store.settings.requireCharging)
+        store.settings = store.settings.copy(requireCharging = true)
+        assertFalse(store.stopWaitingForChargerUnlessChosen())
+        assertTrue(store.settings.requireCharging)
+    }
+
+    @Test
     @Config(sdk = [34])
     fun folderSelectionUsesGenerationOnModernReleases() {
         val (sql, args) = MediaStoreLibrary.buildSelection(listOf("DCIM/", "My_Folder/"), sinceGeneration = 12, sinceSeconds = null)

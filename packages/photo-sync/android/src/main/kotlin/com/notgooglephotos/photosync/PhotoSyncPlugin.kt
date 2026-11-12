@@ -68,6 +68,7 @@ class PhotoSyncPlugin : Plugin() {
 
     override fun load() {
         runtime = PhotoSyncRuntime.get(context)
+        if (runtime.store.stopWaitingForChargerUnlessChosen()) runtime.scheduler.apply()
         runtime.notifier.ensureChannels()
         scope.launch(Dispatchers.Default) {
             var lastKey = ""

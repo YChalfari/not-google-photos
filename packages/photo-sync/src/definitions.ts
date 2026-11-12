@@ -166,7 +166,7 @@ export interface SyncSettings {
   wifiOnly?: boolean;
   /**
    * Wait until the phone is plugged in before the first full backup and before videos.
-   * Default true. When false, those uploads run on Wi-Fi without a charger.
+   * Default false. Photos upload on Wi-Fi without a charger unless this is on.
    */
   requireCharging?: boolean;
   /** Only upload videos while the phone is charging. Default true. Ignored when `requireCharging` is false. */

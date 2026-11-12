@@ -94,6 +94,7 @@ class ReminderAndMemoryTest {
 
     @Test
     fun videosOnlyCauseMentionsCharging() = runBlocking {
+        fx.store.settings = fx.store.settings.copy(requireCharging = true)
         fx.conditions.charging = false
         fx.add("clip.mp4", bytes = "v".toByteArray(), kind = MediaKind.VIDEO, captureTime = fx.clock.nowMs)
         val reminder = EndOfDayReminder(fx.engine, fx.db, fx.store, fx.conditions, alerts, fx.clock)

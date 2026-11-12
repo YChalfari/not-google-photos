@@ -92,6 +92,7 @@ class SyncSchedulerTest {
     fun firstBackupDropsTheChargingConstraintWhenAllowed() {
         fx.start()
         fx.store.firstBackupComplete = false
+        fx.store.settings = fx.store.settings.copy(requireCharging = true)
         scheduler.apply()
         assertTrue(pending(SyncScheduler.FIRST_BACKUP).single().constraints.requiresCharging())
 
