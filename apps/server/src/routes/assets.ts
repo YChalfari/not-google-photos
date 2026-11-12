@@ -1,5 +1,6 @@
 import { AssetUploadFields, type AssetCheckResponse, type AssetVerifyResponse } from '@ngp/shared';
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import type { CleanupFilter } from '@ngp/shared';
+import { and, desc, eq, ilike, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import { canViewAsset, filterOwnedAssetIds } from '../authz/access';
 import { assets, files, rejectedChecksums } from '../db/schema';
 import type { Handlers } from '../http/contract';
@@ -36,7 +37,10 @@ export const assetHandlers: Handlers = {
       .select({ sha1: rejectedChecksums.sha1 })
       .from(rejectedChecksums)
       .where(
-        and(eq(rejectedChecksums.ownerId, auth.user.id), inArray(rejectedChecksums.sha1, checksums)),
+        and(
+          eq(rejectedChecksums.ownerId, auth.user.id),
+          inArray(rejectedChecksums.sha1, checksums),
+        ),
       );
     const rejectedSet = new Set(refused.map((row) => row.sha1));
     const missing: string[] = [];
@@ -92,7 +96,10 @@ export const assetHandlers: Handlers = {
       .select({ sha1: rejectedChecksums.sha1 })
       .from(rejectedChecksums)
       .where(
-        and(eq(rejectedChecksums.ownerId, auth.user.id), eq(rejectedChecksums.sha1, fields.checksum)),
+        and(
+          eq(rejectedChecksums.ownerId, auth.user.id),
+          eq(rejectedChecksums.sha1, fields.checksum),
+        ),
       );
     if (refused) {
       setStatus(200);
@@ -150,7 +157,11 @@ export const assetHandlers: Handlers = {
         { assetId: created.id, userId: auth.user.id, bytes: file.sizeBytes },
         'Stored upload',
       );
-      return { assetId: created.id, status: 'created' as const, intake: fields.intake ?? 'library' };
+      return {
+        assetId: created.id,
+        status: 'created' as const,
+        intake: fields.intake ?? 'library',
+      };
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
       const [race] = await ctx.db
@@ -246,8 +257,12 @@ export const assetHandlers: Handlers = {
       isNull(assets.trashedAt),
     );
     const [counted] = await ctx.db
-      .select({ total: sql<number>`count(*)::int` })
+      .select({
+        total: sql<number>`count(*)::int`,
+        totalBytes: sql<number>`coalesce(sum(${files.sizeBytes}), 0)::float8`,
+      })
       .from(assets)
+      .innerJoin(files, eq(files.id, assets.fileId))
       .where(where);
     const offset = pageOffset(query.cursor);
     const rows = await ctx.db
@@ -261,8 +276,28 @@ export const assetHandlers: Handlers = {
     return {
       items: await toSummaries(ctx, auth.user.id, page),
       total: Number(counted?.total ?? 0),
+      totalBytes: Number(counted?.totalBytes ?? 0),
       nextCursor: rows.length > query.limit ? String(offset + query.limit) : null,
     };
+  },
+
+  'assets.acceptAllReview': async ({ ctx, auth }) => {
+    const updated = await ctx.db
+      .update(assets)
+      .set({
+        intake: 'library',
+        processingSteps: sql`${assets.processingSteps} || '{"faces":"pending"}'::jsonb`,
+      })
+      .where(
+        and(
+          eq(assets.ownerId, auth.user.id),
+          eq(assets.intake, 'review'),
+          isNull(assets.trashedAt),
+        ),
+      )
+      .returning({ id: assets.id });
+    for (const row of updated) await scheduleRecognition(ctx, row.id);
+    return { updated: updated.length };
   },
 
   'assets.acceptReview': async ({ ctx, auth, body }) => {
@@ -312,7 +347,67 @@ export const assetHandlers: Handlers = {
     });
     return { deleted };
   },
+
+  'assets.cleanup': async ({ ctx, auth, query }) => {
+    const where = cleanupWhere(auth.user.id, query.filter, query.maxFaces);
+    const [counted] = await ctx.db
+      .select({
+        total: sql<number>`count(*)::int`,
+        totalBytes: sql<number>`coalesce(sum(${files.sizeBytes}), 0)::float8`,
+      })
+      .from(assets)
+      .innerJoin(files, eq(files.id, assets.fileId))
+      .where(where);
+    const offset = pageOffset(query.cursor);
+    const rows = await ctx.db
+      .select()
+      .from(assets)
+      .where(where)
+      .orderBy(sql`${assets.capturedAt} desc nulls last`, desc(assets.id))
+      .offset(offset)
+      .limit(query.limit + 1);
+    const page = rows.slice(0, query.limit);
+    return {
+      items: await toSummaries(ctx, auth.user.id, page),
+      total: Number(counted?.total ?? 0),
+      totalBytes: Number(counted?.totalBytes ?? 0),
+      nextCursor: rows.length > query.limit ? String(offset + query.limit) : null,
+    };
+  },
+
+  'assets.cleanupTrash': async ({ ctx, auth, body }) => {
+    const updated = await ctx.db
+      .update(assets)
+      .set({ trashedAt: sql`coalesce(${assets.trashedAt}, now())` })
+      .where(cleanupWhere(auth.user.id, body.filter, body.maxFaces))
+      .returning({ id: assets.id });
+    return { updated: updated.length };
+  },
 };
+
+/** Library photos worth a cleanup pass. Favorites stay where they are. */
+function cleanupWhere(ownerId: string, filter: CleanupFilter, maxFaces: number): SQL | undefined {
+  const base = and(
+    eq(assets.ownerId, ownerId),
+    eq(assets.intake, 'library'),
+    isNull(assets.trashedAt),
+    eq(assets.isFavorite, false),
+  );
+  if (filter === 'screenshots') return and(base, ilike(assets.originalFilename, '%screenshot%'));
+  const person = (extra: SQL) => sql`exists (
+    select 1 from faces f
+    join people p on p.id = f.person_id
+    where f.asset_id = ${assets.id} and f.ignored = false and ${extra}
+  )`;
+  if (filter === 'unimportant') {
+    return and(base, person(sql`p.important = false`), sql`not ${person(sql`p.important = true`)}`);
+  }
+  return and(
+    base,
+    person(sql`p.face_count <= ${maxFaces}`),
+    sql`not ${person(sql`p.face_count > ${maxFaces}`)}`,
+  );
+}
 
 function pageOffset(cursor: string | undefined): number {
   if (!cursor) return 0;

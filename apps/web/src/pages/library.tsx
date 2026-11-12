@@ -171,7 +171,19 @@ export function LibraryPage() {
           </Button>
         </div>
       </div>
-      {scope === 'library' ? <ReviewWaitingLink /> : null}
+      {scope === 'library' ? (
+        <div className="flex flex-col gap-2">
+          <ReviewWaitingLink />
+          <p className="text-sm">
+            <Link
+              to="/cleanup"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Clean up the library
+            </Link>
+          </p>
+        </div>
+      ) : null}
       {scope === 'trash' ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">Kept for 30 days, then deleted.</p>

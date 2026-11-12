@@ -7,8 +7,16 @@ import { SelectionBar } from '@/components/selection-bar';
 import { EmptyState, ErrorState, LoadingBlock, Page } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { api, errorMessage } from '@/lib/api';
+import { formatBytes } from '@/lib/format';
 import { assetUrl } from '@/lib/native';
 import { useStatus } from '@/lib/status';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const MODE_KEY = 'ngp.review.mode';
 /** acceptReview and rejectReview take at most this many ids. */
@@ -32,13 +40,15 @@ export function ReviewWaitingLink() {
   });
   const total = review.data?.total ?? 0;
   if (total < 1) return null;
-  const label = total === 1 ? '1 photo is waiting' : `${total} photos are waiting`;
+  const label = total === 1 ? '1 photo is waiting' : `${total.toLocaleString()} photos are waiting`;
   return (
     <p className="text-sm">
       <Link to="/review" className="font-medium text-primary underline-offset-4 hover:underline">
         {label}
       </Link>{' '}
-      <span className="text-muted-foreground">for a yes or no.</span>
+      <span className="text-muted-foreground">
+        ({formatBytes(review.data?.totalBytes ?? 0)}) for a yes or no.
+      </span>
     </p>
   );
 }
@@ -51,6 +61,7 @@ export function ReviewPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmKeepAll, setConfirmKeepAll] = useState(false);
   const review = useInfiniteQuery({
     queryKey: ['assets', 'review', 'items'],
     initialPageParam: undefined as string | undefined,
@@ -131,6 +142,25 @@ export function ReviewPage() {
     }
   }
 
+  async function keepAll() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api('assets.acceptAllReview');
+      setSelected(new Set());
+      setConfirmKeepAll(false);
+      announce('Kept all');
+      await queryClient.invalidateQueries({ queryKey: ['assets', 'review'] });
+      await queryClient.invalidateQueries({ queryKey: ['timeline'] });
+      await queryClient.invalidateQueries({ queryKey: ['me', 'storage'] });
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function selectAll() {
     if (busy) return;
     setMode('grid');
@@ -144,6 +174,10 @@ export function ReviewPage() {
 
   const current = items[0] ?? null;
   const allSelected = items.length > 0 && items.every((item) => selected.has(item.id));
+  const totalBytes = review.data?.pages[0]?.totalBytes ?? 0;
+  const leftLabel = review.isPending
+    ? 'Checking…'
+    : `${total === 1 ? '1 left' : `${total.toLocaleString()} left`} · ${formatBytes(totalBytes)}`;
 
   return (
     <Page
@@ -152,10 +186,19 @@ export function ReviewPage() {
       lede="Photos that didn't match anyone you marked Important. Keeping one adds it. Saying no deletes it from the server."
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {review.isPending ? 'Checking…' : total === 1 ? '1 left' : `${total} left`}
-        </p>
-        <div className="flex gap-1">
+        <p className="text-sm text-muted-foreground">{leftLabel}</p>
+        <div className="flex flex-wrap gap-1">
+          {total > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => setConfirmKeepAll(true)}
+            >
+              Keep all
+            </Button>
+          ) : null}
           {items.length > 0 ? (
             <Button
               type="button"
@@ -255,6 +298,25 @@ export function ReviewPage() {
           )}
         </>
       ) : null}
+      <Dialog open={confirmKeepAll} onOpenChange={setConfirmKeepAll}>
+        <DialogContent>
+          <DialogTitle>Keep every waiting photo?</DialogTitle>
+          <DialogDescription>
+            This adds all {total.toLocaleString()} photos ({formatBytes(totalBytes)}) to your
+            library, including ones that are not loaded on this page.
+          </DialogDescription>
+          <div className="mt-6 flex justify-end gap-2">
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={busy}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="button" pending={busy} onClick={() => void keepAll()}>
+              {busy ? 'Keeping…' : 'Keep all'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       {review.hasNextPage ? (
         <Button
           type="button"

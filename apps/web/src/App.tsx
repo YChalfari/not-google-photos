@@ -7,6 +7,7 @@ import { BackupPage } from '@/pages/backup';
 import { ConnectPage } from '@/pages/connect';
 import { InvitePage } from '@/pages/invite';
 import { LibraryPage } from '@/pages/library';
+import { CleanupPage } from '@/pages/cleanup';
 import { ReviewPage } from '@/pages/review';
 import { LoginPage } from '@/pages/login';
 import { MemoryPage } from '@/pages/memory';
@@ -47,6 +48,7 @@ export function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/backup" element={<BackupPage />} />
           <Route path="/review" element={<ReviewPage />} />
+          <Route path="/cleanup" element={<CleanupPage />} />
           <Route path="/memories/:id" element={<MemoryPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="/admin" element={<AdminPage />} />

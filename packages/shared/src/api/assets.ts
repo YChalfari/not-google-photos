@@ -191,6 +191,15 @@ export const ReviewAssetIds = z.object({
   ids: z.array(Id).min(1).max(1000),
 });
 
+export const CleanupFilter = z.enum(['screenshots', 'unimportant', 'rare']);
+export type CleanupFilter = z.infer<typeof CleanupFilter>;
+
+export const CleanupQuery = PageQuery.extend({
+  filter: CleanupFilter,
+  /** Used by `rare`: people with at most this many faces. */
+  maxFaces: z.coerce.number().int().min(1).max(100).default(3),
+});
+
 export const assetEndpoints = defineEndpoints({
   'assets.check': {
     method: 'POST',
@@ -274,7 +283,19 @@ export const assetEndpoints = defineEndpoints({
     query: PageQuery,
     response: paginated(AssetSummary).extend({
       total: z.number().int().nonnegative(),
+      /** Combined size of every photo still waiting, not just this page. */
+      totalBytes: z.number().nonnegative(),
     }),
+    stability: 'draft',
+  },
+  'assets.acceptAllReview': {
+    method: 'POST',
+    path: '/api/assets/review/accept-all',
+    auth: 'user',
+    tag: 'assets',
+    summary: 'Move every holding-area photo into the library',
+    description: 'Includes photos that are not on the current page.',
+    response: z.object({ updated: z.number().int().nonnegative() }),
     stability: 'draft',
   },
   'assets.acceptReview': {
@@ -295,6 +316,35 @@ export const assetEndpoints = defineEndpoints({
     summary: 'Delete holding-area photos and remember not to upload those bytes again',
     body: ReviewAssetIds,
     response: z.object({ deleted: z.number().int().nonnegative() }),
+    stability: 'draft',
+  },
+  'assets.cleanup': {
+    method: 'GET',
+    path: '/api/assets/cleanup',
+    auth: 'user',
+    tag: 'assets',
+    summary: 'Library photos that match a cleanup filter',
+    description:
+      'Favorites are left out. `unimportant` is photos of people who are not marked Important, and of nobody who is. `rare` is photos whose people each appear at most `maxFaces` times.',
+    query: CleanupQuery,
+    response: paginated(AssetSummary).extend({
+      total: z.number().int().nonnegative(),
+      totalBytes: z.number().nonnegative(),
+    }),
+    stability: 'draft',
+  },
+  'assets.cleanupTrash': {
+    method: 'POST',
+    path: '/api/assets/cleanup/trash',
+    auth: 'user',
+    tag: 'assets',
+    summary: 'Move every library photo matching a cleanup filter to the trash',
+    description: 'Favorites are left out. Trashed photos are kept for 30 days.',
+    body: z.object({
+      filter: CleanupFilter,
+      maxFaces: z.number().int().min(1).max(100).default(3),
+    }),
+    response: z.object({ updated: z.number().int().nonnegative() }),
     stability: 'draft',
   },
 });

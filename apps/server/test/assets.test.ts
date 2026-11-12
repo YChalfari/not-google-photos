@@ -3,8 +3,16 @@ import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SAMPLE_SHOTS, renderSamplePhoto } from '../src/cli/sample-photos';
-import { assets, files } from '../src/db/schema';
-import { createUser, pairPhone, signIn } from './support/factories';
+import { assets, files, people } from '../src/db/schema';
+import { refreshPeople } from '../src/people/library';
+import {
+  createUser,
+  insertAsset,
+  insertFace,
+  insertPerson,
+  pairPhone,
+  signIn,
+} from './support/factories';
 import { createTestServer, type TestServer } from './support/server';
 
 let t: TestServer;
@@ -307,6 +315,7 @@ describe('asset upload, thumbnails, and verify', () => {
     const waiting = await browser.call('assets.review', { query: { limit: 50 } });
     expect(waiting.status).toBe(200);
     expect(waiting.data.total).toBe(1);
+    expect(waiting.data.totalBytes).toBe(bytes.length);
     expect(waiting.data.items.map((item) => item.id)).toEqual([uploaded.assetId]);
 
     const held = await browser.call('assets.check', { body: { checksums: [checksum] } });
@@ -323,9 +332,7 @@ describe('asset upload, thumbnails, and verify', () => {
     const verified = await browser.call('assets.verify', {
       body: { items: [{ checksum, size: bytes.length }] },
     });
-    expect(verified.data.results).toEqual([
-      { checksum, assetId: null, status: 'missing' },
-    ]);
+    expect(verified.data.results).toEqual([{ checksum, assetId: null, status: 'missing' }]);
 
     const duplicate = await browser.fetch('/api/assets', {
       method: 'POST',
@@ -349,6 +356,7 @@ describe('asset upload, thumbnails, and verify', () => {
     expect(month.data.assets.map((asset) => asset.id)).toEqual([uploaded.assetId]);
     const empty = await browser.call('assets.review', { query: { limit: 10 } });
     expect(empty.data.total).toBe(0);
+    expect(empty.data.totalBytes).toBe(0);
 
     const refusedBytes = await jpeg({ r: 1, g: 2, b: 3 });
     const refusedChecksum = sha1(refusedBytes);
@@ -386,5 +394,86 @@ describe('asset upload, thumbnails, and verify', () => {
       query: { scope: 'library', withShared: 'false' },
     });
     expect(still.data.assets.map((asset) => asset.id)).toEqual([uploaded.assetId]);
+  });
+
+  it('keeps every waiting photo, including ones that were not listed', async () => {
+    const user = await createUser(t.ctx, { email: 'keep-all@example.com' });
+    const client = await signIn(t.app, user.email);
+    const first = await insertAsset(t.ctx, user.id, {
+      filename: 'a.jpg',
+      intake: 'review',
+      bytes: Buffer.from('one'),
+    });
+    const second = await insertAsset(t.ctx, user.id, {
+      filename: 'b.jpg',
+      intake: 'review',
+      bytes: Buffer.from('two!'),
+    });
+    const waiting = await client.call('assets.review', { query: { limit: 1 } });
+    expect(waiting.data.total).toBe(2);
+    expect(waiting.data.totalBytes).toBe(7);
+    expect(waiting.data.items).toHaveLength(1);
+
+    const kept = await client.call('assets.acceptAllReview');
+    expect(kept.status).toBe(200);
+    expect(kept.data.updated).toBe(2);
+    const left = await client.call('assets.review', { query: { limit: 10 } });
+    expect(left.data.total).toBe(0);
+    const month = await client.call('timeline.bucket', {
+      params: { key: '2024-07' },
+      query: { scope: 'library', withShared: 'false' },
+    });
+    expect(month.data.assets.map((asset) => asset.id).sort()).toEqual([first.id, second.id].sort());
+  });
+
+  it('finds screenshots and people who are not important or barely appear', async () => {
+    const user = await createUser(t.ctx, { email: 'cleanup@example.com' });
+    const client = await signIn(t.app, user.email);
+    const shot = await insertAsset(t.ctx, user.id, {
+      filename: 'Screenshot_1.jpg',
+      bytes: Buffer.from('shot'),
+    });
+    const favorite = await insertAsset(t.ctx, user.id, { filename: 'Screenshot_fav.jpg' });
+    await t.ctx.db.update(assets).set({ isFavorite: true }).where(eq(assets.id, favorite.id));
+    const rarePhoto = await insertAsset(t.ctx, user.id, { filename: 'rare.jpg' });
+    const starPhoto = await insertAsset(t.ctx, user.id, { filename: 'star.jpg' });
+    const both = await insertAsset(t.ctx, user.id, { filename: 'both.jpg' });
+    const rare = await insertPerson(t.ctx, user.id, null);
+    const star = await insertPerson(t.ctx, user.id, 'Ada');
+    await t.ctx.db.update(people).set({ important: true }).where(eq(people.id, star.id));
+    await insertFace(t.ctx, { assetId: rarePhoto.id, ownerId: user.id, personId: rare.id });
+    await insertFace(t.ctx, { assetId: starPhoto.id, ownerId: user.id, personId: star.id });
+    await insertFace(t.ctx, { assetId: both.id, ownerId: user.id, personId: rare.id });
+    await insertFace(t.ctx, { assetId: both.id, ownerId: user.id, personId: star.id });
+    await refreshPeople(t.ctx.db, [rare.id, star.id]);
+    await t.ctx.db.update(people).set({ faceCount: 8 }).where(eq(people.id, star.id));
+
+    const screenshots = await client.call('assets.cleanup', {
+      query: { filter: 'screenshots', limit: 20 },
+    });
+    expect(screenshots.data.total).toBe(1);
+    expect(screenshots.data.items.map((item) => item.id)).toEqual([shot.id]);
+    expect(screenshots.data.totalBytes).toBe(4);
+
+    const unimportant = await client.call('assets.cleanup', {
+      query: { filter: 'unimportant', limit: 20 },
+    });
+    expect(unimportant.data.items.map((item) => item.id)).toEqual([rarePhoto.id]);
+
+    const few = await client.call('assets.cleanup', {
+      query: { filter: 'rare', maxFaces: 3, limit: 20 },
+    });
+    expect(few.data.items.map((item) => item.id)).toEqual([rarePhoto.id]);
+
+    const trashed = await client.call('assets.cleanupTrash', {
+      body: { filter: 'screenshots' },
+    });
+    expect(trashed.data.updated).toBe(1);
+    const after = await client.call('assets.cleanup', {
+      query: { filter: 'screenshots', limit: 20 },
+    });
+    expect(after.data.total).toBe(0);
+    const [row] = await t.ctx.db.select().from(assets).where(eq(assets.id, shot.id));
+    expect(row?.trashedAt).toBeTruthy();
   });
 });
