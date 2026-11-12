@@ -416,8 +416,9 @@ function NamingPass({ people, onExit }: { people: readonly PersonSummary[]; onEx
   const queue = people.filter((person) => !person.name && !person.nameSkipped);
   const current = queue[0];
   const [draft, setDraft] = useState<{ id: string; name: string; important: boolean } | null>(null);
-  const name = draft?.id === current?.id ? draft.name : '';
-  const important = draft?.id === current?.id ? draft.important : false;
+  const active = draft !== null && current && draft.id === current.id ? draft : null;
+  const name = active?.name ?? '';
+  const important = active?.important ?? false;
 
   const save = useMutation({
     mutationFn: (person: PersonSummary) =>
