@@ -11,6 +11,8 @@ import { assetUrl } from '@/lib/native';
 import { useStatus } from '@/lib/status';
 
 const MODE_KEY = 'ngp.review.mode';
+/** acceptReview and rejectReview take at most this many ids. */
+const REVIEW_BATCH = 1000;
 
 type ReviewMode = 'swipe' | 'grid';
 
@@ -73,12 +75,7 @@ export function ReviewPage() {
   }, [loadedIds]);
 
   useEffect(() => {
-    if (
-      items.length === 0 &&
-      review.hasNextPage &&
-      !review.isFetchingNextPage &&
-      !review.isError
-    ) {
+    if (items.length === 0 && review.hasNextPage && !review.isFetchingNextPage && !review.isError) {
       void review.fetchNextPage();
     }
   }, [
@@ -104,9 +101,14 @@ export function ReviewPage() {
     setBusy(true);
     setError(null);
     setHiding((current) => new Set([...current, ...ids]));
+    const done = new Set<string>();
     try {
-      if (action === 'keep') await api('assets.acceptReview', { body: { ids } });
-      else await api('assets.rejectReview', { body: { ids } });
+      for (let index = 0; index < ids.length; index += REVIEW_BATCH) {
+        const batch = ids.slice(index, index + REVIEW_BATCH);
+        if (action === 'keep') await api('assets.acceptReview', { body: { ids: batch } });
+        else await api('assets.rejectReview', { body: { ids: batch } });
+        for (const id of batch) done.add(id);
+      }
       setSelected(new Set());
       announce(action === 'keep' ? 'Kept' : 'Left out');
       await queryClient.invalidateQueries({ queryKey: ['assets', 'review'] });
@@ -115,28 +117,56 @@ export function ReviewPage() {
     } catch (caught) {
       setHiding((current) => {
         const next = new Set(current);
-        for (const id of ids) next.delete(id);
+        for (const id of ids) if (!done.has(id)) next.delete(id);
         return next;
       });
+      if (done.size > 0) {
+        await queryClient.invalidateQueries({ queryKey: ['assets', 'review'] });
+        await queryClient.invalidateQueries({ queryKey: ['timeline'] });
+        await queryClient.invalidateQueries({ queryKey: ['me', 'storage'] });
+      }
       setError(errorMessage(caught));
     } finally {
       setBusy(false);
     }
   }
 
+  function selectAll() {
+    if (busy) return;
+    setMode('grid');
+    try {
+      localStorage.setItem(MODE_KEY, 'grid');
+    } catch {
+      // The choice still applies for this visit.
+    }
+    setSelected(new Set(items.map((item) => item.id)));
+  }
+
   const current = items[0] ?? null;
+  const allSelected = items.length > 0 && items.every((item) => selected.has(item.id));
 
   return (
     <Page
       wide={mode === 'grid'}
       title="Review"
-      lede="Photos that didn't match anyone already in your library. Keeping one adds it. Saying no deletes it from the server."
+      lede="Photos that didn't match anyone you marked Important. Keeping one adds it. Saying no deletes it from the server."
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {review.isPending ? 'Checking…' : total === 1 ? '1 left' : `${total} left`}
         </p>
         <div className="flex gap-1">
+          {items.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy || allSelected}
+              onClick={selectAll}
+            >
+              {allSelected ? 'All selected' : 'Select all'}
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="sm"
@@ -194,7 +224,11 @@ export function ReviewPage() {
             onHold={(id) => setSelected((currentIds) => new Set(currentIds).add(id))}
           />
           {selected.size > 0 ? (
-            <SelectionBar count={selected.size} onClear={() => setSelected(new Set())}>
+            <SelectionBar
+              count={selected.size}
+              onClear={() => setSelected(new Set())}
+              onSelectAll={selectAll}
+            >
               <Button
                 type="button"
                 size="sm"
@@ -214,7 +248,10 @@ export function ReviewPage() {
               </Button>
             </SelectionBar>
           ) : (
-            <p className="text-sm text-muted-foreground">Tap photos, then Keep or No.</p>
+            <p className="text-sm text-muted-foreground">
+              Select all covers this batch. Uncheck any you want to handle separately, then Keep or
+              No. Load more brings the next batch.
+            </p>
           )}
         </>
       ) : null}
@@ -250,7 +287,8 @@ function SwipeCard({
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target;
-      if (target instanceof HTMLElement && target.closest('input, textarea, select, button')) return;
+      if (target instanceof HTMLElement && target.closest('input, textarea, select, button'))
+        return;
       if (event.key === 'ArrowRight') {
         event.preventDefault();
         onKeep();
@@ -271,12 +309,19 @@ function SwipeCard({
         {...swipe.handlers}
       >
         {src ? (
-          <img src={src} alt={label} className="max-h-[70vh] w-full object-contain" draggable={false} />
+          <img
+            src={src}
+            alt={label}
+            className="max-h-[70vh] w-full object-contain"
+            draggable={false}
+          />
         ) : (
           <p className="text-sm text-muted-foreground">{label}</p>
         )}
       </div>
-      <p className="text-center text-sm text-muted-foreground">Swipe right to keep, left to say no.</p>
+      <p className="text-center text-sm text-muted-foreground">
+        Swipe right to keep, left to say no.
+      </p>
       <div className="flex justify-center gap-3">
         <Button type="button" variant="destructive" disabled={busy} onClick={onNo}>
           No

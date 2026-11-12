@@ -270,7 +270,7 @@ export const assets = pgTable(
     isFavorite: boolean('is_favorite').notNull().default(false),
     isArchived: boolean('is_archived').notNull().default(false),
     /**
-     * `review` photos are uploaded but hidden until a known person is found or the owner keeps them.
+     * `review` photos are uploaded but hidden until someone marked important is found, or the owner keeps them.
      * They still count toward storage.
      */
     intake: assetIntake('intake').notNull().default('library'),
@@ -376,6 +376,10 @@ export const people = pgTable(
     }),
     isHidden: boolean('is_hidden').notNull().default(false),
     hideFromMemories: boolean('hide_from_memories').notNull().default(false),
+    /** Photos of this person from other folders go into the library without a review. */
+    important: boolean('important').notNull().default(false),
+    /** Left unnamed on purpose, so the naming pass moves on. */
+    nameSkipped: boolean('name_skipped').notNull().default(false),
     faceCount: integer('face_count').notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

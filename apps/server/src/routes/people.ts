@@ -14,6 +14,7 @@ import { ApiError } from '../http/errors';
 import type { Handlers } from '../http/contract';
 import { toSummaries } from '../media/summaries';
 import { personSummaries, refreshPeople, requirePerson } from '../people/library';
+import { reconsiderReviewPhotos } from '../recognition/recognize';
 
 function pageOffset(cursor: string | undefined): number {
   if (!cursor) return 0;
@@ -84,12 +85,18 @@ export const peopleHandlers: Handlers = {
       .update(people)
       .set({
         ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.name ? { nameSkipped: false } : {}),
+        ...(body.nameSkipped !== undefined ? { nameSkipped: body.nameSkipped } : {}),
         ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
         ...(body.hideFromMemories !== undefined ? { hideFromMemories: body.hideFromMemories } : {}),
+        ...(body.important !== undefined ? { important: body.important } : {}),
         ...(nextCover !== undefined ? { coverFaceId: nextCover } : {}),
       })
       .where(eq(people.id, person.id))
       .returning();
+    if (body.important === true && !person.important) {
+      await reconsiderReviewPhotos(ctx, auth.user.id);
+    }
     const [summary] = await personSummaries(ctx, auth.user.id, [updated!]);
     return { person: summary! };
   },
@@ -107,6 +114,7 @@ export const peopleHandlers: Handlers = {
     const keptCover = target.coverFaceId;
     let name = target.name;
     let coverFaceId = target.coverFaceId;
+    const important = target.important || sources.some((source) => source.important);
     await ctx.db.transaction(async (tx) => {
       for (const source of sources) {
         const rules = await tx.select().from(albumRules).where(eq(albumRules.personId, source.id));
@@ -138,13 +146,17 @@ export const peopleHandlers: Handlers = {
         .from(albumRules)
         .where(eq(albumRules.personId, target.id));
       for (const rule of keptRules) await applyAlbumRule(tx, rule.id);
-      await tx.update(people).set({ name, coverFaceId }).where(eq(people.id, target.id));
+      await tx
+        .update(people)
+        .set({ name, coverFaceId, important, ...(name ? { nameSkipped: false } : {}) })
+        .where(eq(people.id, target.id));
       await refreshPeople(tx, [target.id]);
       if (keptCover) {
         await tx.update(people).set({ coverFaceId: keptCover }).where(eq(people.id, target.id));
       }
     });
 
+    if (important) await reconsiderReviewPhotos(ctx, auth.user.id);
     const person = await requirePerson(ctx, auth.user.id, target.id);
     const [summary] = await personSummaries(ctx, auth.user.id, [person]);
     return { person: summary! };

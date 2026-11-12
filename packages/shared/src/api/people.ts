@@ -10,6 +10,10 @@ export const PersonSummary = z
     faceCount: z.number().int().nonnegative(),
     isHidden: z.boolean(),
     hideFromMemories: z.boolean(),
+    /** Other-folder photos of this person go into the library on their own. */
+    important: z.boolean(),
+    /** The naming pass should leave this person unnamed. */
+    nameSkipped: z.boolean(),
     coverUrl: z.string().nullable(),
     /** Photo the circle is cropped from. */
     coverAssetId: Id.nullable(),
@@ -57,12 +61,15 @@ export const peopleEndpoints = defineEndpoints({
     path: '/api/people/:id',
     auth: 'user',
     tag: 'people',
-    summary: 'Name, hide, or choose the photo used for this person',
+    summary: 'Name, hide, mark important, or choose the photo used for this person',
     params: IdParams,
     body: z.object({
       name: PersonName.nullable().optional(),
       isHidden: z.boolean().optional(),
       hideFromMemories: z.boolean().optional(),
+      important: z.boolean().optional(),
+      /** Skip this person in the naming pass. Naming them clears it. */
+      nameSkipped: z.boolean().optional(),
       coverFaceId: Id.optional(),
       /** Use this photo as the person's picture. Their face in it becomes the circle. */
       coverAssetId: Id.optional(),
@@ -101,7 +108,8 @@ export const peopleEndpoints = defineEndpoints({
     auth: 'user',
     tag: 'people',
     summary: 'Move a face to another person, start a new person, unassign it, or ignore it',
-    description: 'Manual changes are never undone by re-clustering. createPerson starts a new unnamed person for this face only.',
+    description:
+      'Manual changes are never undone by re-clustering. createPerson starts a new unnamed person for this face only.',
     params: IdParams,
     body: z.object({
       personId: Id.nullable().optional(),

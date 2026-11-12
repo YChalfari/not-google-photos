@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { CLIP_EMBEDDING_DIMENSIONS, FACE_EMBEDDING_DIMENSIONS } from '@ngp/shared';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AppContext } from '../context';
 import {
   assetEmbeddings,
@@ -273,6 +273,23 @@ export async function recognizeAsset(ctx: AppContext, assetId: string): Promise<
   );
 }
 
+/**
+ * Review photos were compared with the previous set of important people.
+ * Marking someone important, or merging into them, looks at those photos again.
+ */
+export async function reconsiderReviewPhotos(ctx: AppContext, ownerId: string): Promise<void> {
+  const waiting = await ctx.db
+    .update(assets)
+    .set({
+      processingSteps: sql<
+        Record<string, string>
+      >`jsonb_set(coalesce(${assets.processingSteps}, '{}'::jsonb), '{faces}', '"pending"'::jsonb)`,
+    })
+    .where(and(eq(assets.ownerId, ownerId), eq(assets.intake, 'review'), isNull(assets.trashedAt)))
+    .returning({ id: assets.id });
+  for (const row of waiting) await scheduleRecognition(ctx, row.id);
+}
+
 /** Queues recognition, or runs it now when the queue is off. Does nothing until ML_URL is set. */
 export async function scheduleRecognition(ctx: AppContext, assetId: string): Promise<void> {
   if (!ctx.env.ML_URL) return;
@@ -283,16 +300,21 @@ export async function scheduleRecognition(ctx: AppContext, assetId: string): Pro
   await recognizeAsset(ctx, assetId);
 }
 
-/** People who already have a face on a library photo. A new group does not count. */
+/**
+ * Faces of people marked important, on library photos.
+ * Someone merely grouped in the library does not pull in their other photos.
+ */
 async function libraryPeople(ctx: AppContext, ownerId: string): Promise<KnownFace[]> {
   const rows = await ctx.db
     .select({ personId: faces.personId, embedding: faces.embedding })
     .from(faces)
     .innerJoin(assets, eq(assets.id, faces.assetId))
+    .innerJoin(people, eq(people.id, faces.personId))
     .where(
       and(
         eq(faces.ownerId, ownerId),
         eq(faces.ignored, false),
+        eq(people.important, true),
         eq(assets.intake, 'library'),
         isNull(assets.trashedAt),
       ),

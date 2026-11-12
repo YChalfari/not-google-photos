@@ -90,7 +90,9 @@ describe('recognition on a library', () => {
 
   afterAll(async () => {
     await t?.close();
-    await new Promise<void>((resolve, reject) => ml.close((error) => (error ? reject(error) : resolve())));
+    await new Promise<void>((resolve, reject) =>
+      ml.close((error) => (error ? reject(error) : resolve())),
+    );
   });
 
   it('groups matching faces, tags cake, and finds cats by the plural', async () => {
@@ -103,7 +105,10 @@ describe('recognition on a library', () => {
       await insertDerivedFile(t.ctx, asset.id, 'preview', Buffer.from([marker, 9, 9, 9]));
       await t.ctx.db
         .update(assets)
-        .set({ processingState: 'ready', processingSteps: { thumbnails: 'done', metadata: 'done' } })
+        .set({
+          processingState: 'ready',
+          processingSteps: { thumbnails: 'done', metadata: 'done' },
+        })
         .where(eq(assets.id, asset.id));
       created.push(asset);
     }
@@ -167,7 +172,9 @@ describe('recognition on a library', () => {
     expect(started.status).toBe(200);
     expect(started.data.face.personId).toEqual(expect.any(String));
     expect(started.data.face.personId).not.toBe(group!.id);
-    const newborn = await client.call('people.get', { params: { id: started.data.face.personId! } });
+    const newborn = await client.call('people.get', {
+      params: { id: started.data.face.personId! },
+    });
     expect(newborn.data.person.faceCount).toBe(1);
     expect(newborn.data.person.name).toBeNull();
     const moved = await client.call('faces.update', {
@@ -178,30 +185,68 @@ describe('recognition on a library', () => {
     expect(moved.data.face.personId).toBe(group!.id);
   }, 30_000);
 
-  it('promotes a review photo only when the face is already in the library', async () => {
+  it('promotes a review photo only when that person is important', async () => {
     const user = await createUser(t.ctx, { email: 'review-faces@example.com' });
     const client = await signIn(t.app, user.email);
 
     const library = await insertAsset(t.ctx, user.id, { filename: 'library.jpg' });
     await insertDerivedFile(t.ctx, library.id, 'preview', Buffer.from([1, 9, 9, 9]));
-    await t.ctx.db
-      .update(assets)
-      .set({ processingState: 'ready', processingSteps: { thumbnails: 'done', metadata: 'done' } })
-      .where(eq(assets.id, library.id));
-    await recognizeAsset(t.ctx, library.id);
+    const other = await insertAsset(t.ctx, user.id, { filename: 'other.jpg' });
+    await insertDerivedFile(t.ctx, other.id, 'preview', Buffer.from([2, 9, 9, 9]));
+    for (const asset of [library, other]) {
+      await t.ctx.db
+        .update(assets)
+        .set({
+          processingState: 'ready',
+          processingSteps: { thumbnails: 'done', metadata: 'done' },
+        })
+        .where(eq(assets.id, asset.id));
+      await recognizeAsset(t.ctx, asset.id);
+    }
 
     const known = await insertAsset(t.ctx, user.id, { filename: 'known.jpg', intake: 'review' });
     await insertDerivedFile(t.ctx, known.id, 'preview', Buffer.from([1, 8, 8, 8]));
-    await t.ctx.db
-      .update(assets)
-      .set({ processingState: 'ready', processingSteps: { thumbnails: 'done', metadata: 'done' } })
-      .where(eq(assets.id, known.id));
-    await recognizeAsset(t.ctx, known.id);
+    const otherReview = await insertAsset(t.ctx, user.id, {
+      filename: 'other-review.jpg',
+      intake: 'review',
+    });
+    await insertDerivedFile(t.ctx, otherReview.id, 'preview', Buffer.from([2, 8, 8, 8]));
+    for (const asset of [known, otherReview]) {
+      await t.ctx.db
+        .update(assets)
+        .set({
+          processingState: 'ready',
+          processingSteps: { thumbnails: 'done', metadata: 'done' },
+        })
+        .where(eq(assets.id, asset.id));
+      await recognizeAsset(t.ctx, asset.id);
+      const [row] = await t.ctx.db.select().from(assets).where(eq(assets.id, asset.id));
+      expect(row?.intake).toBe('review');
+    }
+
+    const libraryDetail = await client.call('assets.get', { params: { id: library.id } });
+    const personId = libraryDetail.data.faces[0]?.person?.id;
+    expect(personId).toEqual(expect.any(String));
+    const marked = await client.call('people.update', {
+      params: { id: personId! },
+      body: { important: true },
+    });
+    expect(marked.status).toBe(200);
+    expect(marked.data.person.important).toBe(true);
+
     const [promoted] = await t.ctx.db.select().from(assets).where(eq(assets.id, known.id));
     expect(promoted?.intake).toBe('library');
+    const [stillWaiting] = await t.ctx.db
+      .select()
+      .from(assets)
+      .where(eq(assets.id, otherReview.id));
+    expect(stillWaiting?.intake).toBe('review');
 
-    const stranger = await insertAsset(t.ctx, user.id, { filename: 'stranger.jpg', intake: 'review' });
-    await insertDerivedFile(t.ctx, stranger.id, 'preview', Buffer.from([2, 7, 7, 7]));
+    const stranger = await insertAsset(t.ctx, user.id, {
+      filename: 'stranger.jpg',
+      intake: 'review',
+    });
+    await insertDerivedFile(t.ctx, stranger.id, 'preview', Buffer.from([3, 7, 7, 7]));
     await t.ctx.db
       .update(assets)
       .set({ processingState: 'ready', processingSteps: { thumbnails: 'done', metadata: 'done' } })
@@ -211,17 +256,34 @@ describe('recognition on a library', () => {
     expect(waiting?.intake).toBe('review');
     expect(waiting?.processingSteps).toMatchObject({ faces: 'done', tags: 'skipped' });
 
+    const skipped = await client.call('people.update', {
+      params: { id: personId! },
+      body: { nameSkipped: true },
+    });
+    expect(skipped.data.person.nameSkipped).toBe(true);
+    const named = await client.call('people.update', {
+      params: { id: personId! },
+      body: { name: 'Maya' },
+    });
+    expect(named.data.person.name).toBe('Maya');
+    expect(named.data.person.nameSkipped).toBe(false);
+    expect(named.data.person.important).toBe(true);
+
     const people = await client.call('people.list');
-    expect(people.data.people).toHaveLength(1);
-    expect(people.data.people[0]?.faceCount).toBe(2);
+    expect(people.data.people).toHaveLength(2);
+    expect(people.data.people.find((person) => person.id === personId)?.faceCount).toBe(2);
 
     const month = await client.call('timeline.bucket', {
       params: { key: '2024-07' },
       query: { scope: 'library', withShared: 'false' },
     });
-    expect(month.data.assets.map((asset) => asset.id).sort()).toEqual([known.id, library.id].sort());
+    expect(month.data.assets.map((asset) => asset.id).sort()).toEqual(
+      [known.id, library.id, other.id].sort(),
+    );
     const review = await client.call('assets.review', { query: { limit: 20 } });
-    expect(review.data.items.map((item) => item.id)).toEqual([stranger.id]);
+    expect(review.data.items.map((item) => item.id).sort()).toEqual(
+      [otherReview.id, stranger.id].sort(),
+    );
   }, 30_000);
 });
 
@@ -238,7 +300,9 @@ async function handleMl(request: IncomingMessage, response: ServerResponse): Pro
   }
   if (url.pathname === '/v1/models') {
     send({
-      faces: { recommended: { match_max_distance: 0.5, suggest_max_distance: 0.6, seed_min_quality: 0.5 } },
+      faces: {
+        recommended: { match_max_distance: 0.5, suggest_max_distance: 0.6, seed_min_quality: 0.5 },
+      },
       clip: { logit_scale: 100, logit_bias: -10, recommended: { tag_min_probability: 0.005 } },
     });
     return;
@@ -246,7 +310,9 @@ async function handleMl(request: IncomingMessage, response: ServerResponse): Pro
   if (url.pathname === '/v1/clip/text/batch') {
     const parsed = JSON.parse(body.toString()) as { texts?: string[] };
     send({
-      embeddings: (parsed.texts ?? []).map((text) => unit(Math.max(0, LABELS.indexOf(text.toLowerCase())), 768)),
+      embeddings: (parsed.texts ?? []).map((text) =>
+        unit(Math.max(0, LABELS.indexOf(text.toLowerCase())), 768),
+      ),
     });
     return;
   }

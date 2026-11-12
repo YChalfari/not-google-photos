@@ -174,6 +174,8 @@ export async function suggestRulesForAlbum(
       faceCount: people.faceCount,
       isHidden: people.isHidden,
       hideFromMemories: people.hideFromMemories,
+      important: people.important,
+      nameSkipped: people.nameSkipped,
     })
     .from(people)
     .where(eq(people.ownerId, userId));
@@ -219,6 +221,8 @@ export async function suggestRulesForAlbum(
         faceCount: best.person.faceCount,
         isHidden: best.person.isHidden,
         hideFromMemories: best.person.hideFromMemories,
+        important: best.person.important,
+        nameSkipped: best.person.nameSkipped,
         coverUrl: null,
         coverAssetId: null,
         coverBox: null,

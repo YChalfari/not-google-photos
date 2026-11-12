@@ -159,7 +159,9 @@ function PhoneBackup() {
             variant="outline"
             disabled={busy !== null}
             aria-busy={busy === 'refresh'}
-            onClick={() => void run('refresh', () => queryClient.invalidateQueries({ queryKey: ['backup'] }))}
+            onClick={() =>
+              void run('refresh', () => queryClient.invalidateQueries({ queryKey: ['backup'] }))
+            }
           >
             {busy === 'refresh' ? 'Refreshing…' : 'Refresh'}
           </Button>
@@ -175,6 +177,12 @@ function PhoneBackup() {
           ) : (
             <LoadingBlock label="Checking backup" />
           )}
+          {status && status.phase === 'idle' && status.firstBackup.remaining > 0 ? (
+            <p className="mt-4 text-sm text-muted-foreground">
+              {status.firstBackup.remaining.toLocaleString()} older photos stay in Pending until
+              this phone is charging on Wi-Fi. Back up now sends them without waiting.
+            </p>
+          ) : null}
           {status?.current ? (
             <p className="mt-4 text-sm text-muted-foreground">
               Uploading {status.current.fileName} ({status.current.index} of {status.current.of}).
@@ -257,7 +265,7 @@ function PhoneBackup() {
             <span>
               Also back up photos from Downloads, WhatsApp, and other folders
               <span className="mt-1 block text-muted-foreground">
-                Those photos wait in Review unless they show someone already in your library.
+                Those photos wait in Review unless they show someone you marked Important.
                 Screenshots and camera scans always wait there. The first time this is on, older
                 photos wait for Wi-Fi and charging.
               </span>
@@ -323,7 +331,11 @@ function PhoneBackup() {
               aria-busy={busy === 'folders'}
               onClick={() => void run('folders', loadFolders)}
             >
-              {busy === 'folders' ? 'Loading folders…' : folders ? 'Refresh folders' : 'Choose folders'}
+              {busy === 'folders'
+                ? 'Loading folders…'
+                : folders
+                  ? 'Refresh folders'
+                  : 'Choose folders'}
             </Button>
           </div>
           {folders ? (
@@ -351,7 +363,9 @@ function PhoneBackup() {
           <p className="text-xs text-muted-foreground">
             A checked folder includes its subfolders. At least one stays checked.
           </p>
-          <FormError error={error ?? statusQuery.error ?? settingsQuery.error ?? permissionsQuery.error} />
+          <FormError
+            error={error ?? statusQuery.error ?? settingsQuery.error ?? permissionsQuery.error}
+          />
         </CardContent>
       </Card>
     </Page>

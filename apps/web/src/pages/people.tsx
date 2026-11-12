@@ -1,3 +1,4 @@
+import type { PersonSummary } from '@ngp/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -13,10 +14,12 @@ import { useAssetParam } from '@/lib/asset-route';
 import { cn } from '@/lib/utils';
 
 export function PeoplePage() {
+  const [naming, setNaming] = useState(false);
   const people = useQuery({
     queryKey: ['people'],
     queryFn: () => api('people.list'),
   });
+  const unnamed = people.data?.people.filter((person) => !person.name && !person.nameSkipped) ?? [];
 
   return (
     <Page title="People" wide>
@@ -29,12 +32,22 @@ export function PeoplePage() {
         />
       ) : null}
       {people.data && people.data.people.length === 0 ? (
-        <EmptyState
-          title="No people yet"
-          body="They'll show up here."
-        />
+        <EmptyState title="No people yet" body="They'll show up here." />
       ) : null}
-      {people.data && people.data.people.length > 0 ? (
+      {naming && people.data ? (
+        <NamingPass people={people.data.people} onExit={() => setNaming(false)} />
+      ) : null}
+      {!naming && unnamed.length > 0 ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {unnamed.length} {unnamed.length === 1 ? 'person has' : 'people have'} no name.
+          </p>
+          <Button type="button" onClick={() => setNaming(true)}>
+            Name them
+          </Button>
+        </div>
+      ) : null}
+      {!naming && people.data && people.data.people.length > 0 ? (
         <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6">
           {people.data.people.map((person) => (
             <Link
@@ -56,6 +69,7 @@ export function PeoplePage() {
               </span>
               <span className="text-xs text-muted-foreground">
                 {person.faceCount} {person.faceCount === 1 ? 'face' : 'faces'}
+                {person.important ? ' · Important' : ''}
               </span>
             </Link>
           ))}
@@ -92,6 +106,7 @@ export function PersonPage() {
     queryFn: () => api('people.list'),
   });
   const [name, setName] = useState<string | null>(null);
+  const [mergeQuery, setMergeQuery] = useState('');
   const [mergeSelection, setMergeSelection] = useState<{ personId: string; ids: string[] }>({
     personId: id,
     ids: [],
@@ -109,6 +124,18 @@ export function PersonPage() {
       setName(null);
       announce('Saved');
       await queryClient.invalidateQueries({ queryKey: ['people'] });
+    },
+  });
+  const markImportant = useMutation({
+    mutationFn: (important: boolean) =>
+      api('people.update', { params: { id }, body: { important } }),
+    onSuccess: async (_result, important) => {
+      announce(important ? 'Marked important' : 'No longer important');
+      await queryClient.invalidateQueries({ queryKey: ['people'] });
+      if (important) {
+        await queryClient.invalidateQueries({ queryKey: ['assets'] });
+        await queryClient.invalidateQueries({ queryKey: ['timeline'] });
+      }
     },
   });
   const hide = useMutation({
@@ -142,6 +169,11 @@ export function PersonPage() {
   });
 
   const mergeChoices = (others.data?.people ?? []).filter((item) => item.id !== id);
+  const mergeFilter = mergeQuery.trim().toLowerCase();
+  const visibleChoices = mergeChoices.filter((item) => {
+    if (!mergeFilter) return true;
+    return (item.name ?? 'unnamed').toLowerCase().includes(mergeFilter);
+  });
   const selectedPeople = mergeChoices.filter((item) => mergeIds.includes(item.id));
   const mergePlan = person.data ? mergeDestination(person.data.person, selectedPeople) : null;
 
@@ -173,7 +205,7 @@ export function PersonPage() {
         />
       ) : null}
       {person.data ? (
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <div className="flex shrink-0 flex-col items-center gap-2">
             <span className="size-24 overflow-hidden rounded-full bg-secondary">
               {person.data.person.coverUrl ? (
@@ -203,35 +235,53 @@ export function PersonPage() {
               </button>
             ) : null}
           </div>
-          <form
-            className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center"
-            onSubmit={(event) => {
-              event.preventDefault();
-              save.mutate();
-            }}
-          >
-            <Input
-              aria-label="Name"
-              value={draft}
-              placeholder="Name"
-              onChange={(event) => setName(event.target.value)}
-            />
-            <Button type="submit" pending={save.isPending}>
-              {save.isPending ? 'Saving…' : 'Save name'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              pending={hide.isPending}
-              onClick={() => hide.mutate(!person.data.person.isHidden)}
+          <div className="flex min-w-0 flex-1 flex-col gap-4">
+            <form
+              className="flex flex-col gap-3 sm:flex-row sm:items-center"
+              onSubmit={(event) => {
+                event.preventDefault();
+                save.mutate();
+              }}
             >
-              {hide.isPending
-                ? 'Saving…'
-                : person.data.person.isHidden
-                  ? 'Show in People'
-                  : 'Hide from People'}
-            </Button>
-          </form>
+              <Input
+                aria-label="Name"
+                value={draft}
+                placeholder="Name"
+                onChange={(event) => setName(event.target.value)}
+              />
+              <Button type="submit" pending={save.isPending}>
+                {save.isPending ? 'Saving…' : 'Save name'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                pending={hide.isPending}
+                onClick={() => hide.mutate(!person.data.person.isHidden)}
+              >
+                {hide.isPending
+                  ? 'Saving…'
+                  : person.data.person.isHidden
+                    ? 'Show in People'
+                    : 'Hide from People'}
+              </Button>
+            </form>
+            <label className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-primary"
+                checked={person.data.person.important}
+                disabled={markImportant.isPending}
+                onChange={(event) => markImportant.mutate(event.target.checked)}
+              />
+              <span>
+                Important
+                <span className="mt-1 block text-muted-foreground">
+                  Photos of them from Downloads, WhatsApp, and other folders go into your library. A
+                  photo still comes in when anyone in it is important.
+                </span>
+              </span>
+            </label>
+          </div>
         </div>
       ) : null}
       {mergeChoices.length > 0 ? (
@@ -247,38 +297,52 @@ export function PersonPage() {
           <div>
             <p className="text-sm font-medium">Same person twice?</p>
           </div>
-          <div
-            className="grid max-h-64 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6 md:grid-cols-8"
-            role="group"
-            aria-label="Merge with someone"
-          >
-            {mergeChoices.map((item) => {
-              const picked = mergeIds.includes(item.id);
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-pressed={picked}
-                  title={`${item.name ?? 'Unnamed'}, ${item.faceCount} faces`}
-                  className="flex min-w-0 flex-col items-center gap-1 rounded-md p-1 hover:bg-accent"
-                  onClick={() => toggleMerge(item.id)}
-                >
-                  <span
-                    className={cn(
-                      'aspect-square w-full overflow-hidden rounded-full bg-secondary',
-                      picked ? 'ring-2 ring-primary' : 'ring-1 ring-border',
-                    )}
+          <Input
+            aria-label="Find someone to merge"
+            placeholder="Find someone"
+            value={mergeQuery}
+            autoComplete="off"
+            onChange={(event) => setMergeQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.preventDefault();
+            }}
+          />
+          {visibleChoices.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No one matches that.</p>
+          ) : (
+            <div
+              className="grid max-h-64 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6 md:grid-cols-8"
+              role="group"
+              aria-label="Merge with someone"
+            >
+              {visibleChoices.map((item) => {
+                const picked = mergeIds.includes(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-pressed={picked}
+                    title={`${item.name ?? 'Unnamed'}, ${item.faceCount} faces`}
+                    className="flex min-w-0 flex-col items-center gap-1 rounded-md p-1 hover:bg-accent"
+                    onClick={() => toggleMerge(item.id)}
                   >
-                    <FaceAvatar src={item.coverUrl} box={item.coverBox} alt="" />
-                  </span>
-                  <span className="w-full truncate text-center text-xs">
-                    {item.name ?? 'Unnamed'}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{item.faceCount}</span>
-                </button>
-              );
-            })}
-          </div>
+                    <span
+                      className={cn(
+                        'aspect-square w-full overflow-hidden rounded-full bg-secondary',
+                        picked ? 'ring-2 ring-primary' : 'ring-1 ring-border',
+                      )}
+                    >
+                      <FaceAvatar src={item.coverUrl} box={item.coverBox} alt="" />
+                    </span>
+                    <span className="w-full truncate text-center text-xs">
+                      {item.name ?? 'Unnamed'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{item.faceCount}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div>
             <Button
               type="submit"
@@ -298,6 +362,9 @@ export function PersonPage() {
         </form>
       ) : null}
       {save.isError ? <ErrorState title="Couldn't save that name" error={save.error} /> : null}
+      {markImportant.isError ? (
+        <ErrorState title="Couldn't update Important" error={markImportant.error} />
+      ) : null}
       {hide.isError ? <ErrorState title="Couldn't update People" error={hide.error} /> : null}
       {merge.isError ? (
         <ErrorState title="Couldn't merge those people" error={merge.error} />
@@ -340,6 +407,120 @@ export function PersonPage() {
         onNeighbor={viewer.select}
       />
     </Page>
+  );
+}
+
+function NamingPass({ people, onExit }: { people: readonly PersonSummary[]; onExit: () => void }) {
+  const queryClient = useQueryClient();
+  const announce = useStatus();
+  const queue = people.filter((person) => !person.name && !person.nameSkipped);
+  const current = queue[0];
+  const [draft, setDraft] = useState<{ id: string; name: string; important: boolean } | null>(null);
+  const name = draft?.id === current?.id ? draft.name : '';
+  const important = draft?.id === current?.id ? draft.important : false;
+
+  const save = useMutation({
+    mutationFn: (person: PersonSummary) =>
+      api('people.update', {
+        params: { id: person.id },
+        body: { name: name.trim(), important },
+      }),
+    onSuccess: async () => {
+      announce(`Named ${name.trim()}`);
+      setDraft(null);
+      await queryClient.invalidateQueries({ queryKey: ['people'] });
+      if (important) {
+        await queryClient.invalidateQueries({ queryKey: ['assets'] });
+        await queryClient.invalidateQueries({ queryKey: ['timeline'] });
+      }
+    },
+  });
+  const skip = useMutation({
+    mutationFn: (person: PersonSummary) =>
+      api('people.update', { params: { id: person.id }, body: { nameSkipped: true } }),
+    onSuccess: async () => {
+      announce('Skipped');
+      setDraft(null);
+      await queryClient.invalidateQueries({ queryKey: ['people'] });
+    },
+  });
+
+  if (!current) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <p className="text-sm text-muted-foreground">Everyone left is named or skipped.</p>
+        <Button type="button" variant="outline" onClick={onExit}>
+          Back to people
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="flex max-w-md flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (name.trim()) save.mutate(current);
+      }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {queue.length} {queue.length === 1 ? 'person' : 'people'} left to name
+        </p>
+        <Button type="button" variant="ghost" onClick={onExit}>
+          Back
+        </Button>
+      </div>
+      <span className="size-40 overflow-hidden rounded-full bg-secondary">
+        {current.coverUrl ? (
+          <FaceAvatar src={current.coverUrl} box={current.coverBox} alt="" />
+        ) : (
+          <span className="flex h-full items-center justify-center text-3xl text-muted-foreground">
+            ?
+          </span>
+        )}
+      </span>
+      <p className="text-sm text-muted-foreground">
+        {current.faceCount} {current.faceCount === 1 ? 'face' : 'faces'}
+      </p>
+      <Input
+        aria-label="Name"
+        placeholder="Name"
+        value={name}
+        autoFocus
+        onChange={(event) => setDraft({ id: current.id, name: event.target.value, important })}
+      />
+      <label className="flex items-start gap-3 text-sm">
+        <input
+          type="checkbox"
+          className="mt-0.5 size-4 accent-primary"
+          checked={important}
+          onChange={(event) => setDraft({ id: current.id, name, important: event.target.checked })}
+        />
+        <span>
+          Important
+          <span className="mt-1 block text-muted-foreground">
+            Photos of them from other folders go into your library.
+          </span>
+        </span>
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" pending={save.isPending} disabled={name.trim().length === 0}>
+          {save.isPending ? 'Saving…' : 'Save'}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          pending={skip.isPending}
+          onClick={() => skip.mutate(current)}
+        >
+          {skip.isPending ? 'Skipping…' : 'Skip'}
+        </Button>
+      </div>
+      {save.isError ? <ErrorState title="Couldn't save that name" error={save.error} /> : null}
+      {skip.isError ? <ErrorState title="Couldn't skip this person" error={skip.error} /> : null}
+    </form>
   );
 }
 

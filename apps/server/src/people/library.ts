@@ -24,7 +24,8 @@ export async function refreshPeople(db: DbOrTx, personIds: readonly string[]): P
         ),
       );
     const best = [...rows].sort((left, right) => (right.quality ?? 0) - (left.quality ?? 0))[0];
-    const coverStillHere = person.coverFaceId !== null && rows.some((row) => row.id === person.coverFaceId);
+    const coverStillHere =
+      person.coverFaceId !== null && rows.some((row) => row.id === person.coverFaceId);
     await db
       .update(people)
       .set({
@@ -85,6 +86,8 @@ export async function personSummaries(
       faceCount: row.faceCount,
       isHidden: row.isHidden,
       hideFromMemories: row.hideFromMemories,
+      important: row.important,
+      nameSkipped: row.nameSkipped,
       coverUrl,
       coverAssetId: face?.assetId ?? null,
       coverBox: face ? coverBox(face) : null,
