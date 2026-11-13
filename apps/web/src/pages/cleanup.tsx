@@ -236,7 +236,8 @@ export function CleanupPage() {
             </SelectionBar>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Select all covers this batch. Trash all moves every match, including ones not loaded.
+              Slide across photos to select them. Select all covers this batch. Trash all moves
+              every match, including ones not loaded.
             </p>
           )}
         </>

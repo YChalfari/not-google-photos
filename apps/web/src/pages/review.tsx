@@ -292,8 +292,8 @@ export function ReviewPage() {
             </SelectionBar>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Select all covers this batch. Uncheck any you want to handle separately, then Keep or
-              No. Load more brings the next batch.
+              Slide across photos to select them. Select all covers this batch. Uncheck any you want
+              to handle separately, then Keep or No. Load more brings the next batch.
             </p>
           )}
         </>

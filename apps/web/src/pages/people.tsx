@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 import { useAssetParam } from '@/lib/asset-route';
+import { useSlideSelect } from '@/lib/slide-select';
 import { cn } from '@/lib/utils';
 
 export function PeoplePage() {
@@ -188,6 +189,11 @@ export function PersonPage() {
       return { personId: id, ids: next };
     });
   }
+  const slideMerge = useSlideSelect({
+    enabled: visibleChoices.length > 0,
+    isSelected: (personId) => mergeIds.includes(personId),
+    onToggle: toggleMerge,
+  });
 
   return (
     <Page title={person.data?.person.name ?? 'Unnamed'} wide>
@@ -311,9 +317,15 @@ export function PersonPage() {
             <p className="text-sm text-muted-foreground">No one matches that.</p>
           ) : (
             <div
-              className="grid max-h-64 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6 md:grid-cols-8"
+              ref={slideMerge.ref}
+              className="grid max-h-64 touch-pan-y grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6 md:grid-cols-8"
               role="group"
               aria-label="Merge with someone"
+              onPointerDown={slideMerge.onPointerDown}
+              onPointerMove={slideMerge.onPointerMove}
+              onPointerUp={slideMerge.onPointerUp}
+              onPointerCancel={slideMerge.onPointerCancel}
+              onLostPointerCapture={slideMerge.onLostPointerCapture}
             >
               {visibleChoices.map((item) => {
                 const picked = mergeIds.includes(item.id);
@@ -321,10 +333,14 @@ export function PersonPage() {
                   <button
                     key={item.id}
                     type="button"
+                    data-select-id={item.id}
                     aria-pressed={picked}
                     title={`${item.name ?? 'Unnamed'}, ${item.faceCount} faces`}
-                    className="flex min-w-0 flex-col items-center gap-1 rounded-md p-1 hover:bg-accent"
-                    onClick={() => toggleMerge(item.id)}
+                    className="flex min-w-0 flex-col items-center gap-1 rounded-md p-1 select-none hover:bg-accent"
+                    onClick={() => {
+                      if (slideMerge.consumeClick()) return;
+                      toggleMerge(item.id);
+                    }}
                   >
                     <span
                       className={cn(
